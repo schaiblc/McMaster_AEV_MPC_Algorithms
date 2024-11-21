@@ -1,17 +1,17 @@
 # The distance between the front and
 # rear axle of the racecar
-wheelbase: 0.3302 # meters
+wheelbase: 0.287 # meters
 # width of racecar
-width: 0.2032 # meters
+width: 0.342 # meters
 
 # steering delay
 buffer_length: 5
 
 # Limits on the speed and steering angle
-max_speed: 7. #  meters/second
+max_speed: 2.0 #  meters/second
 max_steering_angle: 0.4189 # radians
-max_accel: 7.51 # meters/second^2
-max_decel: 8.26 # meters/second^2
+max_accel: 2.5 #7.51 # meters/second^2
+max_decel: 2.5 #8.26 # meters/second^2
 max_steering_vel: 3.2 # radians/second
 friction_coeff: 0.523 # - (complete estimate)
 height_cg: 0.074 # m (roughly measured to be 3.25 in)
@@ -23,16 +23,44 @@ mass: 3.47 # kg (measured on car 'lidart')
 moment_inertia: .04712 # kg m^2 (estimated as a rectangle with width and height of car and evenly distributed mass, then shifted to account for center of mass location)
 
 # The rate at which the pose and the lidar publish
-update_pose_rate: 0.001
+update_pose_rate: 0.02 #Changed from 0.02 in order to reduce oscillation, MPC will now better keep up with vehicle in simulation
+
+# Camera parameters
+min_cv_range: 0.3 # meters
+max_cv_range: 3.0 # meters
+num_cv_sample_rows: 16
+num_cv_sample_cols: 300
+
+cv_lidar_range_max_diff: 20 # meters; @TODO: tune this or ignore it
+camera_height: 0.15 #0.144 # meters; @TODO: use altitude measured by IMU
+cv_real_to_theo_ground_range_ratio: 0.8
+cv_real_to_theo_ground_range_ratio_near_horizon: 0.7
+cv_ground_range_decay_row: 285 # measured from experiment
+cv_pitch_angle_hardcoded: rad(2.0/180*pi) # radians; pitch angle offset for camera; 0 angle is horizontal, positive direction is going down
+cv_ground_angle: rad(0/180*pi) # radians; angle below which we validate points with ground distances; 0 angle is horizontal, positive direction is going down
+
+# The distance from the center of the
+# rear axis (base_link) to the camera
+cv_distance_to_lidar: 0.27017 # meters
+
+#ground plane parameters
+cv_groundplane_max_height: 0.03
+cv_groundplane_max_distance: 0.03
+
+
 
 # Lidar simulation parameters
-scan_beams: 1080
-scan_field_of_view: 6.2831853 #4.71 # radians
+scan_beams: 1152  # A3 Sensitivity mode @ 20 Hz
+#scan_beams: 947   # A3 Stability mode @ 20 Hz
+#scan_beams: 1946  # A3 Sensitivity @ 10 Hz
+#scan_beams: 1359  # A3 Stability @ 10 Hz
 
+scan_field_of_view: 6.2831853 #4.71 # radians
+scan_range: 15.0
 
 # The distance from the center of the
 # rear axis (base_link) to the lidar
-scan_distance_to_base_link: 0.275 # meters
+scan_distance_to_base_link: 0.01286 # meters
 
 # The standard deviation of the noise applied
 # to the lidar simulation
@@ -47,7 +75,7 @@ map_free_threshold: 0.8
 ttc_threshold: 0.01
 
 # Indices for mux controller
-mux_size: 5
+mux_size: 6
 joy_mux_idx: 0
 key_mux_idx: 1
 random_walker_mux_idx: 2
@@ -56,19 +84,21 @@ nav_mux_idx: 4
 # **Add index for new planning method here**
 # **(increase mux_size accordingly)**
 new_method_mux_idx: -1
+collision_assistance_mux_idx: 5
 
 # Enables joystick if true
 joy: true
 # Joystick indices
 joy_speed_axis: 1
 joy_angle_axis: 3
-joy_max_speed: 2. # meters/second
+joy_max_speed: 1 #2. # meters/second
 # Joystick indices for toggling mux
 joy_button_idx: 4  # LB button
 key_button_idx: 6 # not sure 
 brake_button_idx: 0 # A button
 random_walk_button_idx: 1 # ? button
 nav_button_idx: 5 # RB button
+collision_assistance_button_idx: 2 # X button
 # **Add button for new planning method here**
 new_button_idx: -1
 
@@ -97,11 +127,18 @@ scan_topic: "/scan"
 pose_topic: "/pose"
 ground_truth_pose_topic: "/gt_pose"
 odom_topic: "/odom"
-imu_topic: "/imu"
+imu_topic: "/imu/data"
 pose_rviz_topic: "/initialpose"
 keyboard_topic: "/key"
 brake_bool_topic: "/brake_bool"
 mux_topic: "/mux"
+depth_image_topic: "/camera/depth/image_rect_raw"
+depth_info_topic: "/camera/depth/camera_info"
+cv_ranges_topic: "/depth_image"
+depth_index_topic: "/depth_index"
+depth_points_topic: "/depth_points"
+
+
 
 # Topic names of various drive channels
 rand_drive_topic: "/rand_drive"
@@ -109,6 +146,7 @@ brake_drive_topic: "/brake"
 nav_drive_topic: "/nav"
 # **Add name for new planning method here**
 new_drive_topic: "/new_drive"
+collision_assistance_drive_topic: "/collision_assistance"
 
 # name of file to write collision log to 
 collision_file: "collision_file"
@@ -116,7 +154,73 @@ collision_file: "collision_file"
 # The names of the transformation frames published to
 map_frame: "map"
 base_frame: "base_link"
+base_frame_imu: "base_link_imu"
 scan_frame: "laser"
+odom_frame: "odom"
 
 broadcast_transform: true
 publish_ground_truth_pose: true
+
+
+# Ackermann to VESC parameters
+
+speed_to_erpm_gain: 3182.18
+speed_to_erpm_offset: 0.0
+steering_angle_to_servo_gain: -0.9
+steering_angle_to_servo_offset: 0.56
+
+driver_smoother_rate: 75.0 # messages/sec
+
+
+# Collision Assistance Algorithm Parameters
+
+distance_to_obstacle_th:  1.0
+force_gain: 8.0
+velocity_correction_gain: 0.6
+steering_correction_gain: 0.6
+emergency_brake_active: true
+
+# Wall Following Algorithm Parameters
+
+CenterOffset: 0
+DistanceLeft: 0.9
+DistanceRight: 0.9
+TrackWall: 0
+angle_bl: rad(270*pi/180)
+angle_al: rad(205*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
+angle_br: rad(90*pi/180)
+angle_ar: rad(155*pi/180) #Changed from 175
+n_pts_l: 100
+n_pts_r: 100
+tau: 0.1 
+k_d: 4.0 
+k_p: 3.5
+vehicle_velocity: 2.5
+turn_velocity: 0.8
+velocity_zero: 0.3
+# Gap Following Algorithm Parameters
+
+safe_distance: 2.0
+right_beam_angle: rad(2*pi*4.0/16)
+left_beam_angle: rad(2*pi*12.0/16)
+turn_angle1: rad(pi/6)
+turn_angle2: rad(pi/3)
+stop_time1: 1.0
+stop_time2: 1.0
+# Speed control paramteres
+heading_beam_angle: rad(pi/16)
+stop_distance: 0.4 #m
+stop_distance_decay: 1.5 #m
+
+#MPC Parameters
+nMPC: 3
+kMPC: 8
+angle_thresh: 1
+map_thresh: 0.0
+use_map: 0
+
+# Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
+optim_mode: 1 
+max_lidar_range_opt: 5.0
+# Determines if RGB-D camera is used
+use_camera: 0
