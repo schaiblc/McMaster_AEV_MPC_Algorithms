@@ -23,6 +23,7 @@
 
 #include "nav_msgs/Odometry.h" //Odometer
 #include <nav_msgs/OccupancyGrid.h> //Map
+#include <f1tenth_simulator/YoloData.h> //Neural Network, vehicle detection msg
 
 #include <string>
 #include <vector>
@@ -45,6 +46,7 @@
 #include <cmath> //M_PI, round
 #include <sstream>
 #include <algorithm>
+#include <Eigen/Dense>
 
 #include <QuadProg++.hh>
 #include <xtensor/xarray.hpp>
@@ -69,6 +71,25 @@ struct plane
 	float B;
 	float C;
 	float D; 
+};
+
+struct vehicle_detection
+{
+	int init=0; //Whether the KF for this detetction has been initialized
+	std::vector<int> bound_box={0,0,0,0}; //The CNN bounding box for the last cycle to try to match appropriately in the case of multi-detection
+	//{miny, minx, maxy, maxx}
+	std::vector<double> meas={0.0,0.0}; //The most recent measurement of x & y for the vehicle detected
+	int miss_fr=0; //Consecutive frames missed, if above a set threshold then stop tracking this vehicle
+	int last_det=0; //Flag for identifying whether a measurement was made in the last cycle or not, affects how that time's KF works
+	//Kalman Filter Parameters
+	Eigen::VectorXd state = Eigen::VectorXd::Zero(5); //x, y, theta, vs, delta
+	Eigen::VectorXd diagElements = (Eigen::VectorXd(5) << 0.01, 0.01, std::pow(5 * M_PI / 180, 2), 0.01, std::pow(5 * M_PI / 180, 2)).finished();
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> cov_P = diagElements.asDiagonal();
+	//State, covariance as well as meas, proc noises which can evolve depending on conditions
+	Eigen::MatrixXd proc_noise = cov_P;
+	Eigen::MatrixXd meas_noise = Eigen::Vector2d(0.01, 0.01).asDiagonal();
+	//State transition and observation matrices assumed equal for all detection structs so provided commonly outside struct
+
 };
 
 
@@ -207,6 +228,7 @@ class GapBarrier
 		ros::Subscriber amcl_sub;
 		ros::Subscriber tf_sub;
 		ros::Subscriber map_sub;
+		ros::Subscriber yolo_sub;
 
 		//More CV data members, used if use_camera is true
 		ros::Subscriber depth_img;
@@ -228,6 +250,7 @@ class GapBarrier
 		ros::Publisher wall_marker_pub;
 		ros::Publisher lobs;
 		ros::Publisher robs;
+		ros::Publisher vehicle_detect;
 		ros::Publisher driver_pub;
 		ros::Publisher cv_ranges_pub;
 
@@ -235,7 +258,7 @@ class GapBarrier
 		
 		//topics
 		std::string depth_image_topic, depth_info_topic, cv_ranges_topic, depth_index_topic, 
-		depth_points_topic,lidarscan_topic, drive_topic, odom_topic, mux_topic, imu_topic, map_topic;
+		depth_points_topic,lidarscan_topic, drive_topic, odom_topic, mux_topic, imu_topic, map_topic, yolo_data_topic;
 
 		//time
 		double current_time = ros::Time::now().toSec();
@@ -267,6 +290,7 @@ class GapBarrier
 		visualization_msgs::Marker wall_marker;
 		visualization_msgs::Marker lobs_marker;
 		visualization_msgs::Marker robs_marker;
+		visualization_msgs::Marker vehicle_detect_path;
 
 		//steering & stop time
 		double vel;
@@ -298,8 +322,6 @@ class GapBarrier
 		int startcheck=0;
 		int forcestop=0;
 
-		double lastx=0, lasty=0, lasttheta=0;
-
 		//odom and map transforms for map localization and tf of occupancy grid points
 		double mapx=0, mapy=0, maptheta=0;
 		double odomx=0, odomy=0, odomtheta=0;
@@ -312,6 +334,15 @@ class GapBarrier
 		double map_thresh;
 		int use_map=0; //Whether we use the pre-defined map as part of MPC
 
+		int yolo_rows; //Rows & columns preset for depth camera
+		int yolo_cols;
+		std::vector<vehicle_detection> car_detects;
+
+
+		int det=0;
+		std::vector<std::vector<double>> vehicle_det;
+
+		double lastx=0, lasty=0, lasttheta=0;
 		//imu
 		double imu_roll, imu_pitch, imu_yaw;
 
@@ -370,6 +401,7 @@ class GapBarrier
 			nf.getParam("mux_topic", mux_topic);
 			nf.getParam("imu_topic", imu_topic);
 			nf.getParam("map_topic", map_topic);
+			nf.getParam("yolo_data_topic", yolo_data_topic);
 
 
 
@@ -446,8 +478,8 @@ class GapBarrier
 			last_delta=0;
 			velocity_MPC=vehicle_velocity;
 			
-
-
+			nf.getParam("yolo_rows", yolo_rows);
+			nf.getParam("yolo_cols", yolo_cols);
 
 			//timing
 			nf.getParam("stop_time1", stop_time1);
@@ -499,6 +531,7 @@ class GapBarrier
 			amcl_sub = nf.subscribe("/amcl_pose", 1, &GapBarrier::amcl_callback, this);
 			tf_sub = nf.subscribe("/tf", 20, &GapBarrier::tf_callback, this);
 			map_sub = nf.subscribe(map_topic, 1, &GapBarrier::map_callback, this);
+			yolo_sub=nf.subscribe(yolo_data_topic, 1, &GapBarrier::yolo_callback, this);
 			
 
 			//publications
@@ -508,6 +541,7 @@ class GapBarrier
 			wall_marker_pub=nf.advertise<visualization_msgs::Marker>("walls",2);
 			lobs=nf.advertise<visualization_msgs::Marker>("lobs",2);
 			robs=nf.advertise<visualization_msgs::Marker>("robs",2);
+			vehicle_detect=nf.advertise<visualization_msgs::Marker>("vehicle_detect",2);
 			driver_pub = nf.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
 
 			if(use_camera)
@@ -652,10 +686,98 @@ class GapBarrier
 		}
 
 		void amcl_callback(const geometry_msgs::PoseWithCovarianceStamped & amcl_msg){
-			printf("cov:%lf, %lf, %lf\n",amcl_msg.pose.covariance[0],amcl_msg.pose.covariance[7],amcl_msg.pose.covariance[35]);
-			printf("pose:%lf, %lf, %lf\n",amcl_msg.pose.pose.position.x,amcl_msg.pose.pose.position.y,2*atan2(amcl_msg.pose.pose.orientation.z, amcl_msg.pose.pose.orientation.w));
+			// printf("cov:%lf, %lf, %lf\n",amcl_msg.pose.covariance[0],amcl_msg.pose.covariance[7],amcl_msg.pose.covariance[35]);
+			// printf("pose:%lf, %lf, %lf\n",amcl_msg.pose.pose.position.x,amcl_msg.pose.pose.position.y,2*atan2(amcl_msg.pose.pose.orientation.z, amcl_msg.pose.pose.orientation.w));
 			
 		}
+
+		void yolo_callback(const f1tenth_simulator::YoloData & yolo_msg){ //Process all other vehicle detections for the KF
+			if(!cv_image_data_defined) return;
+			//Multi-vehicle tracking, distinguishing between detections
+			std::vector<int> temp_vec(car_detects.size(), -1); //yolo detections of already identified detections
+			std::vector<int> no_det; //yolo detections of not pre-identified detections
+			std::vector<std::vector<double>> yolo_xy; //x and y measurements of depth from yolo detection
+			
+			vehicle_det.clear(); //This vector is just for plotting detections in rviz
+			cv::Mat cv_image=(cv_bridge::toCvCopy(cv_image_data,cv_image_data.encoding))->image;
+			std::vector<float> cv_point(3);
+
+			for (int i=0;i<yolo_msg.classes.size();i++){
+				int num=-1; float dist=100000;
+				const std::string& class_name = yolo_msg.classes[i];
+				if(class_name=="car"){
+					int x_cv1=yolo_msg.rectangles[4*i+1]*0.75+yolo_msg.rectangles[4*i+3]*0.25; int x_cv2=yolo_msg.rectangles[4*i+1]*0.25+yolo_msg.rectangles[4*i+3]*0.75;
+					int y_cv1=yolo_msg.rectangles[4*i]*0.5+yolo_msg.rectangles[4*i+2]*0.5;
+					//Find average depth of the bounding box
+					int count=0;
+					double av_depth=0;
+					double av_x=0; double av_y=0;
+					for(int x_cv=yolo_msg.rectangles[4*i+1]*0.55+yolo_msg.rectangles[4*i+3]*0.45;x_cv<yolo_msg.rectangles[4*i+1]*0.45+yolo_msg.rectangles[4*i+3]*0.55;x_cv++){
+						for(int y_cv=yolo_msg.rectangles[4*i]*0.55+yolo_msg.rectangles[4*i+2]*0.45;y_cv<yolo_msg.rectangles[4*i]*0.45+yolo_msg.rectangles[4*i+2]*0.55;y_cv++){
+							if((cv_image.ptr<uint16_t>(y_cv)[x_cv])/(float)1000<0.01) continue; //Invalid point, shouldn't be considered in average
+							count++;
+							av_depth=av_depth+(cv_image.ptr<uint16_t>(y_cv)[x_cv])/(float)1000;
+							float pixel[2] = {(float) x_cv, (float) y_cv};
+							rs2_deproject_pixel_to_point(cv_point.data(), &intrinsics, pixel, (cv_image.ptr<uint16_t>(y_cv)[x_cv])/(float)1000);
+							av_x=av_x+cv_point[2]+cv_distance_to_lidar; av_y=av_y-cv_point[0];
+						}
+					}
+					av_depth=av_depth/count;
+					av_x=av_x/count; av_y=av_y/count;
+					yolo_xy.push_back({av_x,av_y});
+
+					//Plot the detections in rviz based on depths and pixel locations
+					float depth= (cv_image.ptr<uint16_t>(y_cv1)[x_cv1])/(float)1000;
+					//2 convert pixel to xyz coordinate in space using camera intrinsics, pixel coords, and depth info
+					float pixel[2] = {(float) x_cv1, (float) y_cv1};
+					rs2_deproject_pixel_to_point(cv_point.data(), &intrinsics, pixel, depth);
+					vehicle_det.push_back({cv_point[2]+cv_distance_to_lidar,-cv_point[0]});
+
+
+					depth= (cv_image.ptr<uint16_t>(y_cv1)[x_cv2])/(float)1000;
+					float pixel1[2] = {(float) x_cv2, (float) y_cv1};
+					rs2_deproject_pixel_to_point(cv_point.data(), &intrinsics, pixel1, depth);
+					vehicle_det.push_back({cv_point[2]+cv_distance_to_lidar,-cv_point[0]});
+
+					for (int j=0; j<car_detects.size();j++){ //Compare midpoints of bounding boxes, find minimum
+						double x_d=pow((car_detects[j].bound_box[1]+car_detects[j].bound_box[3])/2-(yolo_msg.rectangles[4*i+1]+yolo_msg.rectangles[4*i+3])/2,2);
+						double y_d=pow((car_detects[j].bound_box[0]+car_detects[j].bound_box[2])/2-(yolo_msg.rectangles[4*i]+yolo_msg.rectangles[4*i+2])/2,2);
+						if(sqrt(x_d+y_d)<dist && sqrt(x_d+y_d)<141 && temp_vec[j]==-1){ //Find closest match, ensure we aren't matching two yolos to the same detection and threshold dist must be below
+							dist=sqrt(x_d+y_d);
+							num=j;
+						}
+					}
+					if(num!=-1){
+						temp_vec[num]=i; //ith detection is mapped
+					}
+					else no_det.push_back(i);
+
+				}
+			}
+
+			//For all existing detections, provide the x and y of the depth measurement
+			for (int q=0; q<car_detects.size();q++){
+				// printf("ID: %d, yolo: %d\n",q,temp_vec[q]);
+				if(temp_vec[q]!=-1){ //Detection found
+					int i=temp_vec[q];
+					car_detects[q].bound_box={yolo_msg.rectangles[4*i],yolo_msg.rectangles[4*i+1],yolo_msg.rectangles[4*i+2],yolo_msg.rectangles[4*i+3]}; //ymin, xmin, ymax, xmax
+					car_detects[q].meas={yolo_xy[i][0],yolo_xy[i][1]};
+					car_detects[q].last_det=1; //Detected in this round
+				}
+			}
+
+			//For all new detections, create structs appended to the vector (deletions should take place in lidar callback)
+			for (int q=0; q<no_det.size();q++){
+				// printf("ID: %d, yolo: %d NEW\n",q,no_det[q]);
+				int i=no_det[q];
+				vehicle_detection new_det;
+				new_det.bound_box={yolo_msg.rectangles[4*i],yolo_msg.rectangles[4*i+1],yolo_msg.rectangles[4*i+2],yolo_msg.rectangles[4*i+3]}; //ymin, xmin, ymax, xmax
+				new_det.meas={yolo_xy[i][0],yolo_xy[i][1]};
+				new_det.last_det=1;
+				car_detects.push_back(new_det);
+			}
+		}
+
 
 		// void odom_callback(const nav_msgs::OdometryConstPtr& odom_msg){
 		// 	// FILE *file1 = fopen("/home/gjsk/topics1.txt", "a");
@@ -948,7 +1070,7 @@ class GapBarrier
 
 		void augment_camera(std::vector<float> & lidar_ranges)
 		{
-			cv::Mat cv_image=(cv_bridge::toCvCopy(cv_image_data,cv_image_data.encoding))->image; //Encoding type is 16UC1
+			cv::Mat cv_image=(cv_bridge::toCvCopy(cv_image_data,cv_image_data.encoding))->image; //Encoding type is 16UC1 (depth in mm)
 
 			plane ground= compute_groundplane(cv_image);
 
@@ -977,7 +1099,6 @@ class GapBarrier
 					float depth= (cv_image.ptr<uint16_t>(row)[col])/(float)1000;
 
 					
-					
 					if(depth > max_cv_range or depth < min_cv_range)
 					{
 						continue;
@@ -1001,7 +1122,7 @@ class GapBarrier
 					//2. ignore if ground
 
 					//distance is postive if along the same direction as plane normal (down), negative if oppsote plane normal(up)
-
+					
 					if ( distance> -cv_groundplane_max_distance || distance < -camera_max) //max distance from plane to which a point is considered ground
 					{
 						//postive=below plane, 
@@ -1030,16 +1151,14 @@ class GapBarrier
 
 					//3. Overwrite Lidar Points with Camera Points taking into account dif frames of ref
 
-					float lidar_coordx = -(cv_coordz+cv_distance_to_lidar);
-                	float lidar_coordy = cv_coordx;
+					float lidar_coordx = (cv_coordz+cv_distance_to_lidar);
+                	float lidar_coordy = -cv_coordx;
 					float cv_range_temp = std::pow(std::pow(lidar_coordx,2) + std::pow(lidar_coordy,2),0.5);
 					//(coordx^2+coordy^2)^0.5
 
 					int beam_index= std::floor(scan_beams*std::atan2(lidar_coordy, lidar_coordx)/(2*M_PI));
 					float lidar_range = lidar_ranges[beam_index];
 					lidar_ranges[beam_index] = std::min(lidar_range, cv_range_temp);
-
-					
 				}
 			}
 
@@ -1460,13 +1579,74 @@ class GapBarrier
 
 		void lidar_callback(const sensor_msgs::LaserScanConstPtr &data){
 			
-			
 			ls_ang_inc = static_cast<double>(data->angle_increment); 
 			scan_beams = int(2*M_PI/data->angle_increment);
 			ls_str = int(round(scan_beams*right_beam_angle/(2*M_PI)));
 			ls_end = int(round(scan_beams*left_beam_angle/(2*M_PI)));
 
+			//TODO: ADD TIME STUFF HERE
+			ros::Time t = ros::Time::now();
+			current_time = t.toSec();
+			double dt = current_time - prev_time;
+			if(dt>1){
+				dt=default_dt;
+			}
+			prev_time = current_time;
+			
 
+
+			//Vehicle tracking even if we aren't currently driving
+			Eigen::MatrixXd mat1(3, 3);
+			mat1 << 1, 2, 3,
+            		4, -5, 6,
+					7, 8, 9;
+			// std::cout << "Matrix 1:" << std::endl << mat1 << std::endl; //use eigen for Kalman Filter calculations, there may be conflict errors
+			//for example inverse if needed conflicts with QuadProg: under QuadProg.h include but above Eigen, have line:
+			//#undef inverse // Remove the conflicting macro
+			for (int q=car_detects.size()-1; q>=0;q--){ //Iterate backwards to handle deletions
+				// printf("%d\n",car_detects[q].miss_fr);
+				if(car_detects[q].last_det==0){ //No detection over last cycle
+					car_detects[q].miss_fr++;
+					if(car_detects[q].init==1) car_detects[q].init=0; //Two point initialization requires consecutive detections
+					if(car_detects[q].miss_fr>5) car_detects.erase(car_detects.begin()+q); //Not detected over past several frames, delete detection struct
+				}
+				else car_detects[q].miss_fr=0; //Found, reset consecutive missed frames to 0
+				car_detects[q].last_det=0; //Reset detected for next iteration
+			}
+
+			for(int q=0; q<car_detects.size();q++){ //Run the KF for every current detections here
+				if(car_detects[q].init==0){ //Initialize
+					car_detects[q].state[0]=car_detects[q].meas[0];
+					car_detects[q].state[1]=car_detects[q].meas[1];
+					car_detects[q].init=1;
+					continue;
+				}
+				if(car_detects[q].init==1){ //Finish initializing
+					//First transform last x and y to this new frame
+					double tempx=0; double tempy=0;
+					printf("where nan: %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",lastx,lasty,lasttheta,odomx,odomy,odomtheta,car_detects[q].state[0],car_detects[q].state[1]);
+					tempx=odomx+(car_detects[q].state[0]-lastx)*cos(odomtheta-lasttheta)-(car_detects[q].state[1]-lasty)*sin(odomtheta-lasttheta);
+					tempy=odomy+(car_detects[q].state[0]-lastx)*sin(odomtheta-lasttheta)+(car_detects[q].state[1]-lasty)*cos(odomtheta-lasttheta);
+					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
+
+					car_detects[q].state[4]=0; //steering angle
+					car_detects[q].state[3]=sqrt(pow(car_detects[q].meas[0]-car_detects[q].state[0],2)+pow(car_detects[q].meas[1]-car_detects[q].state[1],2))/dt;
+					car_detects[q].state[2]=atan2(car_detects[q].meas[1]-car_detects[q].state[1],car_detects[q].meas[0]-car_detects[q].state[0]);
+					car_detects[q].state[1]=car_detects[q].meas[1];
+					car_detects[q].state[0]=car_detects[q].meas[0];
+					printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
+
+					car_detects[q].init=1;
+					continue;
+				}
+					
+
+				//Incorporate transform between last and current time of our vehicle, account for in measurements so we find relative motion of other vehicle
+				printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
+
+			}
+			printf("%lf, %lf, %lf\n",odomx,odomy,odomtheta);
+			lastx=odomx; lasty=odomy; lasttheta=odomtheta; //Keep our vehicle frame from last cycle to transform frame to new this cycle
 
 			if (!nav_active ||(use_map && !map_saved)) { //Don't start navigation until map is saved if that's what we're using
 				drive_state = "normal";
@@ -1487,10 +1667,10 @@ class GapBarrier
 
 
 			std::vector<float> fused_ranges = data->ranges;
-			// if(use_camera)
-			// {
-			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
-			// }
+			if(use_camera)
+			{
+				if(cv_image_data_defined){ augment_camera(fused_ranges); }
+			}
 
 	
 			// publish_lidar(mod_ranges);
@@ -1505,14 +1685,7 @@ class GapBarrier
 			// ROS_INFO("%s", msg.data.c_str());
 
 
-			//TODO: ADD TIME STUFF HERE
-			ros::Time t = ros::Time::now();
-			current_time = t.toSec();
-			double dt = current_time - prev_time;
-			if(dt>1){
-				dt=default_dt;
-			}
-			prev_time = current_time;
+			
 			
 
 			int sec_len = int(heading_beam_angle/data->angle_increment);
@@ -1994,6 +2167,57 @@ class GapBarrier
 
 				marker_pub.publish(marker);
 
+				//Publish the MPC tracking lines
+				mpc_marker.header.frame_id = "base_link";
+				mpc_marker.header.stamp = ros::Time::now();
+				mpc_marker.type = visualization_msgs::Marker::LINE_LIST;
+				mpc_marker.id = 0; 
+				mpc_marker.action = visualization_msgs::Marker::ADD;
+				mpc_marker.scale.x = 0.1;
+				mpc_marker.color.a = 1.0;
+				mpc_marker.color.r = 0; 
+				mpc_marker.color.g = 0.5;
+				mpc_marker.color.b = 0.5;
+				mpc_marker.pose.orientation.w = 1;
+				
+				mpc_marker.lifetime = ros::Duration(0.1);
+				geometry_msgs::Point p1;
+				mpc_marker.points.clear();
+
+				for (int i=0;i<nMPC;i++){
+					p1.x = startxplot[i];	p1.y = startyplot[i];	p1.z = 0;
+					mpc_marker.points.push_back(p1);
+					p1.x = xptplot[i];	p1.y = yptplot[i];	p1.z = 0;
+					mpc_marker.points.push_back(p1);
+				}
+
+				mpc_marker_pub.publish(mpc_marker);
+
+
+				//Publish the detected vehicle(s) trajectory(s)
+				vehicle_detect_path.header.frame_id = "base_link";
+				vehicle_detect_path.header.stamp = ros::Time::now();
+				vehicle_detect_path.type = visualization_msgs::Marker::LINE_LIST;
+				vehicle_detect_path.id = 0; 
+				vehicle_detect_path.action = visualization_msgs::Marker::ADD;
+				vehicle_detect_path.scale.x = 0.1;
+				vehicle_detect_path.color.a = 1.0;
+				vehicle_detect_path.color.r = 0.6; 
+				vehicle_detect_path.color.g = 0.2;
+				vehicle_detect_path.color.b = 0.8;
+				vehicle_detect_path.pose.orientation.w = 1;
+				
+				vehicle_detect_path.lifetime = ros::Duration(0.1);
+				geometry_msgs::Point p7;
+				vehicle_detect_path.points.clear();
+
+				for (int i=0;i<vehicle_det.size();i++){
+					p7.x = vehicle_det[i][0];	p7.y = vehicle_det[i][1];	p7.z = 0;
+					vehicle_detect_path.points.push_back(p7);
+				}
+
+				vehicle_detect.publish(vehicle_detect_path);
+
 
 				//Publish the wall lines
 				wall_marker.header.frame_id = "base_link";
@@ -2025,32 +2249,6 @@ class GapBarrier
 				wall_marker.points.push_back(p2);
 
 				wall_marker_pub.publish(wall_marker);
-
-				//Publish the MPC tracking lines
-				mpc_marker.header.frame_id = "base_link";
-				mpc_marker.header.stamp = ros::Time::now();
-				mpc_marker.type = visualization_msgs::Marker::LINE_LIST;
-				mpc_marker.id = 0; 
-				mpc_marker.action = visualization_msgs::Marker::ADD;
-				mpc_marker.scale.x = 0.1;
-				mpc_marker.color.a = 1.0;
-				mpc_marker.color.r = 0; 
-				mpc_marker.color.g = 0.5;
-				mpc_marker.color.b = 0.5;
-				mpc_marker.pose.orientation.w = 1;
-				
-				mpc_marker.lifetime = ros::Duration(0.1);
-				geometry_msgs::Point p1;
-				mpc_marker.points.clear();
-
-				for (int i=0;i<nMPC;i++){
-					p1.x = startxplot[i];	p1.y = startyplot[i];	p1.z = 0;
-					mpc_marker.points.push_back(p1);
-					p1.x = xptplot[i];	p1.y = yptplot[i];	p1.z = 0;
-					mpc_marker.points.push_back(p1);
-				}
-
-				mpc_marker_pub.publish(mpc_marker);
 
 				//Publish the left obstacle points
 				lobs_marker.header.frame_id = "base_link";
@@ -2149,9 +2347,9 @@ class GapBarrier
 			drive_msg.header.stamp = ros::Time::now();
 			drive_msg.header.frame_id = "base_link";
 			if(startcheck==1){
-				drive_msg.drive.steering_angle = delta_d; 
+				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
-					drive_msg.drive.speed = velocity_MPC;
+					drive_msg.drive.speed = velocity_MPC; //velocity_MPC
 				}
 				else{
 					drive_msg.drive.speed = 0;
