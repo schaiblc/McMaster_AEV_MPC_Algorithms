@@ -50,7 +50,7 @@
     </node>
 
  <!-- Load the map server -->
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find f1tenth_simulator)/maps/secfloor.yaml"/>
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find f1tenth_simulator)/maps/berlin.yaml"/>
 
 
 <!--> launch AMCL (Adaptive Monte Carlo Localization) for MPC using a pre-existing map -->
@@ -140,12 +140,18 @@
 
   <!-- Launch realsense depth camera -->
   
-  <!-- <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
       <arg name="enable_color"                value="true"/>
       <arg name="enable_depth"                value="true"/>
-      <arg name= "align_depth"                value="true"/>
-      <arg name= "enable_sync"                value="true"/>
-  </include> -->
+      <!-- <arg name= "align_depth"                value="true"/> -->
+      <!-- <arg name= "enable_sync"                value="true"/> -->
+      <!-- <arg name= "color_fps"                  value="30"/>
+      <arg name= "depth_fps"                  value="30"/>
+      <arg name= "depth_width"                value="848"/>
+      <arg name= "depth_height"               value="480"/>
+      <arg name= "color_width"                value="848"/>
+      <arg name= "color_height"               value="480"/> -->
+  </include>
 
   <!-- Launch the mux node with the parameters from params.yaml -->
   <node pkg="f1tenth_simulator" name="mux_controller" type="mux" output="screen">
@@ -175,6 +181,20 @@
   <node pkg="f1tenth_simulator" name="collision_assistance" type="collision_assistance.py" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
+
+
+<!-- Launch Chosen Vision Model-->
+
+  
+  <node pkg="f1tenth_simulator" name="yolo" type="YOLO.py" output="screen" >
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+  
+
+  <!-- <node pkg="f1tenth_simulator" name="FCN" type="FCN.py" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node> -->
+
 
 <!-- Launch preset rviz config--> 
   <node type="rviz" name="rviz" pkg="rviz" args="-d $(find f1tenth_simulator)/rviz/config.rviz" />
