@@ -541,10 +541,13 @@ class AEV_Detector():
 
 
     def rgb_callback(self, data):
-        
+            # print("Time1: ",rospy.Time.now().to_sec(), data.header.stamp.to_sec())
             result, out_data =self.model.inference(data)
+            out_data.time=data.header.stamp.to_sec() #Timestamp of the rgb image, compare to find corresponding depth image
+            # print("RGB: ",rospy.Time.now().to_sec(),data.header.stamp.to_sec())
             self.yolo_pub.publish(result)
-            self.data_pub.publish(out_data) 
+            self.data_pub.publish(out_data)
+            # print("Time2: ",rospy.Time.now().to_sec())
          
         
 
@@ -554,8 +557,11 @@ class AEV_Detector():
 
 def main(args):
     rospy.init_node("YOLO", anonymous=True)
-    vehicles=AEV_Detector()
-    rospy.spin()
+
+    use_neural_net=rospy.get_param("~use_neural_net")
+    if use_neural_net==1:
+        vehicles=AEV_Detector()
+        rospy.spin()
 
 if __name__=='__main__':
 	main(sys.argv)
