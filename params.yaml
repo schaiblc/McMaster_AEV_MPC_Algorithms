@@ -33,6 +33,8 @@ num_cv_sample_cols: 300
 
 cv_lidar_range_max_diff: 20 # meters; @TODO: tune this or ignore it
 camera_height: 0.15 #0.144 # meters; @TODO: use altitude measured by IMU
+camera_min: 0.05
+camera_max: 0.3
 cv_real_to_theo_ground_range_ratio: 0.8
 cv_real_to_theo_ground_range_ratio_near_horizon: 0.7
 cv_ground_range_decay_row: 285 # measured from experiment
@@ -44,8 +46,19 @@ cv_ground_angle: rad(0/180*pi) # radians; angle below which we validate points w
 cv_distance_to_lidar: 0.27017 # meters
 
 #ground plane parameters
-cv_groundplane_max_height: 0.03
-cv_groundplane_max_distance: 0.03
+cv_groundplane_max_height: 0.03 #max height at which points will be considered for fitting the ground plane 0.04 was good
+cv_groundplane_max_distance: 0.03 #max distance from plane at which point is considered ground 0.025 was good
+
+#neural network parameters
+fcn_topic: "/convolutional_neural_networks/fully_convolutional_network/Image"
+yolo_topic: "/convolutional_neural_networks/yolo/Image"
+yolo_data_topic: "/convolutional_neural_networks/yolo/data"
+build_cv_engine: false
+max_yolo_boxes: 40 # max number of boxes expected on screen, too little will throw an inference error as used for mem allocation of output buffer. 
+use_tiny_yolo: false #less accurate but less expensive version of yolo3
+use_yolov5: true
+use_fp16: true #reduce accuracy of model for faster runtime. Must rebuild engine for change to take effect
+yolo_min_score: 0.05
 
 
 
@@ -133,7 +146,10 @@ keyboard_topic: "/key"
 brake_bool_topic: "/brake_bool"
 mux_topic: "/mux"
 depth_image_topic: "/camera/depth/image_rect_raw"
+rgb_image_topic: "/camera/color/image_raw"
 depth_info_topic: "/camera/depth/camera_info"
+rgb_info_topic: "/camera/color/camera_info"
+cam_extrinsics_topic: "/camera/extrinsics/depth_to_color"
 cv_ranges_topic: "/depth_image"
 depth_index_topic: "/depth_index"
 depth_points_topic: "/depth_points"
@@ -219,8 +235,13 @@ angle_thresh: 1
 map_thresh: 0.0
 use_map: 0
 
+yolo_rows: 480
+yolo_cols: 640
+
+use_neural_net: 0
+
 # Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
 optim_mode: 1 
 max_lidar_range_opt: 5.0
 # Determines if RGB-D camera is used
-use_camera: 0
+use_camera: 1
