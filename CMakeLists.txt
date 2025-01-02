@@ -22,6 +22,8 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g") 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+
+
 find_package(Eigen3 REQUIRED)
 find_package(xtensor CONFIG REQUIRED)
 find_package(OpenCV 4 REQUIRED)
@@ -31,10 +33,10 @@ find_package(realsense2 CONFIG REQUIRED)
 ######################################
 
 # Add includes
-include_directories(include ${EIGEN_3_INCLUDE_DIRS} ${xtensor_INCLUDE_DIRS})
+include_directories(include ${EIGEN_3_INCLUDE_DIRS} ${xtensor_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 file(GLOB SRC_FILES src/*.cpp)
 add_library(${PROJECT_NAME} ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} ${LIBS} xtensor realsense2::realsense2)
+target_link_libraries(${PROJECT_NAME} ${LIBS} xtensor realsense2::realsense2 ${OpenCV_LIBS})
 
 set(LIBS ${LIBS} ${PROJECT_NAME})
 
