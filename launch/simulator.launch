@@ -49,10 +49,10 @@
     <!-- Launch realsense depth camera -->
      
     <include file="$(find realsense2_camera)/launch/rs_camera.launch">
-        <arg name="enable_color"                value="false"/>      
+        <arg name="enable_color"                value="true"/>      
         <arg name="enable_depth"                value="true"/>
-        <arg name="enable_sync"		 value="true"/>      
-            </include>
+        <arg name="enable_sync"		              value="true"/>      
+    </include>
     
   <!-- Launch RVIZ -->
     <node pkg="rviz" type="rviz" name="rviz" args="-d $(find f1tenth_simulator)/launch/simulator.rviz" output="screen"/>
