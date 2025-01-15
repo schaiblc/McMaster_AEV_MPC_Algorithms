@@ -324,7 +324,18 @@ class VisionModel():
 
             draw.rectangle(((x_min, y_min), (x_max, y_max)), outline="red")
             # draw.rectangle((((x_av+x_min)/2, (y_av+y_min)/2), ((x_av+x_max)/2, (y_av+y_max)/2)), outline="blue")
-            draw.rectangle((((45*x_max+55*x_min)/100, (45*y_max+55*y_min)/100), ((55*x_max+45*x_min)/100, (55*y_max+45*y_min)/100)), outline="blue")
+            x_start=45; x_end=55; y_start=45; y_end=55 #Assumes 480 x 640, illustrates the different approach for edge detections
+            if(x_min<10 and x_max<630): 
+                x_start=25; x_end=35; #Left edge
+            elif(x_min>10 and x_max>630):
+                x_start=65; x_end=75; #Right edge
+
+            if(y_min<10 and y_max<470):
+                y_start=25; y_end=35; #Top edge
+            elif(y_min>10 and y_max>470):
+                y_start=65; y_end=75; #Bottom edge
+            
+            draw.rectangle((((x_start*x_max+(100-x_start)*x_min)/100, (y_start*y_max+(100-y_start)*y_min)/100), ((x_end*x_max+(100-x_end)*x_min)/100, (y_end*y_max+(100-y_end)*y_min)/100)), outline="blue")
             draw.text((x_max-(x_max-x_min)/2, y_max-(y_max-y_min)/2), class_pred)
             
 
