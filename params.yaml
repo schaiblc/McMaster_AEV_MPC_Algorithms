@@ -203,9 +203,9 @@ DistanceLeft: 0.9
 DistanceRight: 0.9
 TrackWall: 0
 angle_bl: rad(270*pi/180)
-angle_al: rad(205*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
+angle_al: rad(185*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
 angle_br: rad(90*pi/180)
-angle_ar: rad(155*pi/180) #Changed from 175
+angle_ar: rad(175*pi/180) #Changed from 175
 n_pts_l: 100
 n_pts_r: 100
 tau: 0.1 
@@ -216,7 +216,7 @@ turn_velocity: 0.8
 velocity_zero: 0.3
 # Gap Following Algorithm Parameters
 
-safe_distance: 2.0
+safe_distance: 3
 right_beam_angle: rad(2*pi*4.0/16)
 left_beam_angle: rad(2*pi*12.0/16)
 turn_angle1: rad(pi/6)
@@ -237,8 +237,10 @@ use_map: 0
 
 yolo_rows: 480
 yolo_cols: 640
+veh_det_length: 0.5
+veh_det_width: 0.4
 
-use_neural_net: 0
+use_neural_net: 1
 
 # Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
 optim_mode: 1 
