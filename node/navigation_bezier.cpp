@@ -286,6 +286,8 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 
 	//Max change (+ & -) in velocity
 
+	//Smooth minimum obstacle distance
+
 
 
 
