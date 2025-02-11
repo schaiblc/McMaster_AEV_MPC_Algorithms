@@ -109,10 +109,15 @@ struct vehicle_detection
 
 double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //NLOPT cost function
 {
-	double *raw_data = (double *)my_func_data; //First extract as 1D array to get the column count (first value passed)
-	int cols = (int)raw_data[0]; 
+	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
+	int cols = static_cast<int>(raw_data[0]); 
 
-	double (*xopt)[cols] = (double (*)[cols]) my_func_data; //2D array of obstacle locations appended to some certain variables
+	double xopt[2][cols]; //2D array of obstacle locations appended to some certain variables
+	for (int i = 0; i < cols; i++) {
+        xopt[0][i] = raw_data[2*i];
+        xopt[1][i] = raw_data[2*i + 1];
+    }
+
 	int bez_ctrl_pts=xopt[1][0]; //Order of the Bezier Curve
 	int bez_curv_pts=xopt[0][1]; //Discretized points on our curve
 	int bez_alpha=xopt[1][1]; //Shaping of the exponential decay for further points
@@ -165,11 +170,16 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 
 
 void bezier_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* my_func_data){ //Bezier Curve inequalities
+	
+	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
+	int cols = static_cast<int>(raw_data[0]); 
+	printf("%d\n",cols);
+	double xopt[2][cols]; //2D array of obstacle locations appended to some certain variables
+	for (int i = 0; i < cols; i++) {
+        xopt[0][i] = raw_data[2*i];
+        xopt[1][i] = raw_data[2*i + 1];
+    }
 
-	double *raw_data = (double *)my_func_data; //First extract as 1D array to get the column count (first value passed)
-	int cols = (int)raw_data[0]; 
-
-	double (*xopt)[cols] = (double (*)[cols]) my_func_data; //2D array of obstacle locations appended to some certain variables
 	int bez_ctrl_pts=xopt[1][0]; //Order of the Bezier Curve
 	int bez_curv_pts=xopt[0][1]; //Discretized points on our curve
 	int bez_beta=xopt[1][1]; //Large value to use softmin function which is differentiable (different from alpha used in myfunc)
@@ -2650,26 +2660,26 @@ class GapBarrier
 				double bez_x1=0; //Set the fixed point values here
 				double bez_y2=0;
 
-				double* opt_params1 = new double[2*num_obs+3];
-				double* opt_params2 = new double[2*num_obs+7];
+				std::vector<double> opt_params1;
+				std::vector<double> opt_params2;
 				
-				opt_params1[0]=2*num_obs+3; opt_params1[1]=bez_ctrl_pts; opt_params1[2]=bez_curv_pts; opt_params1[3]=bez_alpha; opt_params1[4]=bez_x1; opt_params1[5]=bez_y2;
+				opt_params1.push_back(2*num_obs+3); opt_params1.push_back(bez_ctrl_pts); opt_params1.push_back(bez_curv_pts); opt_params1.push_back(bez_alpha); opt_params1.push_back(bez_x1); opt_params1.push_back(bez_y2);
 
-				opt_params2[0]=2*num_obs+7; opt_params2[1]=bez_ctrl_pts; opt_params2[2]=bez_curv_pts; opt_params2[3]=bez_beta; opt_params2[4]=bez_x1; opt_params2[5]=bez_y2;
-				opt_params2[6]=max_speed; opt_params2[7]=min_speed; opt_params2[8]=max_accel; opt_params2[9]=max_steering_angle; opt_params2[10]=std::abs(max_servo_speed*std::max(default_dt,dt));
-				opt_params2[11]=bez_t_end; opt_params2[12]=wheelbase; opt_params2[13]=bez_min_dist;
+				opt_params2.push_back(2*num_obs+7); opt_params2.push_back(bez_ctrl_pts); opt_params2.push_back(bez_curv_pts); opt_params2.push_back(bez_beta); opt_params2.push_back(bez_x1); opt_params2.push_back(bez_y2);
+				opt_params2.push_back(max_speed); opt_params2.push_back(min_speed); opt_params2.push_back(max_accel); opt_params2.push_back(max_steering_angle); opt_params2.push_back(std::abs(max_servo_speed*std::max(default_dt,dt)));
+				opt_params2.push_back(bez_t_end); opt_params2.push_back(wheelbase); opt_params2.push_back(bez_min_dist);
 
 				for (int i=0; i<num_obs;i++){ //Add all subsampled obstacles to the parameters
-					opt_params1[6+2*i]=sub_bez_obs[i][0];
-					opt_params1[7+2*i]=sub_bez_obs[i][1];
-					opt_params2[14+2*i]=sub_bez_obs[i][0];
-					opt_params2[15+2*i]=sub_bez_obs[i][1];
+					opt_params1.push_back(sub_bez_obs[i][0]);
+					opt_params1.push_back(sub_bez_obs[i][1]);
+					opt_params2.push_back(sub_bez_obs[i][0]);
+					opt_params2.push_back(sub_bez_obs[i][1]);
 				}
 
-				nlopt_set_min_objective(opt, myfunc, &opt_params1);
+				nlopt_set_min_objective(opt, myfunc, opt_params1.data());
 				double tol[9*bez_curv_pts]={1e-8};
 				
-				nlopt_add_inequality_mconstraint(opt, 9*bez_curv_pts, bezier_inequality_con, &opt_params2, tol);
+				nlopt_add_inequality_mconstraint(opt, 9*bez_curv_pts, bezier_inequality_con, opt_params2.data(), tol);
 			
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
@@ -2710,8 +2720,6 @@ class GapBarrier
 
 				nlopt_destroy(opt);
 
-				delete[] opt_params1;
-				delete[] opt_params2;
 
 
 
