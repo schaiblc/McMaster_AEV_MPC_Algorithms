@@ -126,10 +126,12 @@ add_message_files(
   find_library(QUADPROGPP_LIBRARIES NAMES quadprog)
   find_path(QUADPROGPP_INCLUDE_DIR NAMES QuadProg++.hh)
   target_link_libraries(navigation ${QUADPROGPP_LIBRARIES})
+  target_link_libraries(navigation_bezier ${QUADPROGPP_LIBRARIES})
 
   find_library(NLOPT_LIBRARIES NAMES nlopt)
   find_path(NLOPT_INCLUDE_DIR NAMES nlopt.hpp)
   target_link_libraries(navigation ${NLOPT_LIBRARIES})
+  target_link_libraries(navigation_bezier ${NLOPT_LIBRARIES})
 
 
 
