@@ -9,6 +9,7 @@ buffer_length: 5
 
 # Limits on the speed and steering angle
 max_speed: 2.0 #  meters/second
+min_speed: 1.7 # Otherwise, vehicle stops
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
@@ -240,7 +241,17 @@ yolo_cols: 640
 veh_det_length: 0.5
 veh_det_width: 0.4
 
-use_neural_net: 1
+use_neural_net: 0
+
+#Bezier MPC Parameters
+bez_ctrl_pts: 5
+bez_curv_pts: 10
+bez_alpha: 5.5
+bez_beta: 10
+bez_min_dist: 0.3
+bez_t_end: 1
+obs_sep: 0.2
+max_obs: 50
 
 # Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
 optim_mode: 1 

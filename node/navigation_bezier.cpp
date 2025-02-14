@@ -158,19 +158,19 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			
 			// if(bez_alpha*dist2>100) continue; //Numerical error since too small so skip this obs
 			
-			funcreturn=funcreturn+(1/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
+			funcreturn=funcreturn+(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
 			//Next, find grad for each of five variables
 			if(grad){
-	/* x2 */ 	grad[0]=grad[0]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
-	/* x3 */ 	grad[1]=grad[1]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
-	/* y3 */ 	grad[2]=grad[2]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
-	/* x4 */ 	grad[3]=grad[3]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
-	/* y4 */ 	grad[4]=grad[4]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
+	/* x2 */ 	grad[0]=grad[0]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
+	/* x3 */ 	grad[1]=grad[1]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
+	/* y3 */ 	grad[2]=grad[2]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
+	/* x4 */ 	grad[3]=grad[3]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
+	/* y4 */ 	grad[4]=grad[4]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
 			}
 
 		}
 	}
-	
+
 	return funcreturn;
 }
 
@@ -205,7 +205,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	//[2] -> y3
 	//[3] -> x4
 	//[4] -> y4
-
+	int nanflag=0;
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
 		double t=double(i)/double(bez_curv_pts-1);
@@ -339,6 +339,9 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		for(int j=0;j<cols-7;j++){
 			double dist1= pow(pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
 			result[9*i+8]=result[9*i+8]+exp(-1*double(bez_beta)*dist1);
+			if(result[9*i+8]==0){
+				printf("ZERO %d, %d, %e, %lf, %lf, %lf, %lf\n",i,j,result[9*i+8], bez_curv[i][0],xopt[0][j+7],bez_curv[i][1],xopt[1][j+7]);
+			}
 
 			if(grad){
 		/*x2*/	grad[(9*i+8)*n]=grad[(9*i+8)*n]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px2;
@@ -349,15 +352,20 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 			}
 		}
 		if(grad){
+			double myval=grad[(9*i+8)*n];
 			grad[(9*i+8)*n]=-grad[(9*i+8)*n]/result[9*i+8];
 			grad[(9*i+8)*n+1]=-grad[(9*i+8)*n+1]/result[9*i+8];
 			grad[(9*i+8)*n+2]=-grad[(9*i+8)*n+2]/result[9*i+8];
 			grad[(9*i+8)*n+3]=-grad[(9*i+8)*n+3]/result[9*i+8];
 			grad[(9*i+8)*n+4]=-grad[(9*i+8)*n+4]/result[9*i+8];
+			if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
+				nanflag=1;
+				printf("NAN %e, %e\n",myval,result[9*i+8]);
+			}
 		}
 
 		double myval=result[9*i+8];
-		result[9*i+8]=1/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
+		result[9*i+8]=1.0/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
 		if(std::isnan(result[9*i+8])){
 			printf("NAN %lf\n",myval);
 		}
@@ -376,6 +384,103 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 			}
 		}
 	}
+
+
+	//Manual checking of analytical gradients
+	// std::vector<std::vector<double>> bez_curv1;
+	// double hval=1e-8;
+	// //Create the discretized Bezier Curve
+	// for(int i=0; i<bez_curv_pts; i++){
+	// 	double t=double(i)/double(bez_curv_pts-1);
+	// 	double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*(hval+x[3]);
+	// 	double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
+	// 	bez_curv1.push_back({bez_x,bez_y});
+	// }
+	// double result1[9*(bez_curv_pts-1)+9];
+	// if(result1){
+	// 	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
+	// 		result1[i]=0;
+	// 	}
+	// }
+	
+
+	// if(grad){
+	// 	for(int i=0;i<bez_curv_pts; i++){
+	// 		double t=double(i)/double(bez_curv_pts-1);
+	// 		double x_dot=4*x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*(hval+x[3])*pow(t,3);
+	// 		double x_ddot=4*x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*(hval+x[3])*pow(t,2);
+	// 		double x_dddot=4*x1*(-24*t+18)+6*x[0]*(24*t-12)+4*x[1]*(-24*t+6)+24*(hval+x[3])*t;
+
+	// 		double y_dot=6*y2*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[2]*(-4*pow(t,3)+3*pow(t,2))+4*x[4]*pow(t,3);
+	// 		double y_ddot=6*y2*(12*pow(t,2)-12*t+2)+4*x[2]*(-12*pow(t,2)+6*t)+12*x[4]*pow(t,2);
+	// 		double y_dddot=6*y2*(24*t-12)+4*x[2]*(-24*t+6)+24*x[4]*t;
+
+	// 		double curv=(x_dot*y_ddot-y_dot*x_ddot)/(pow(pow(x_dot,2)+pow(y_dot,2),1.5));
+	// 		double curv_dot=((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))/pow((pow(x_dot,2)+pow(y_dot,2)),2.5);
+
+	// 		double px2=6*pow(1-t,2)*pow(t,2);double px3=4*(1-t)*pow(t,3);double py3=px3;double px4=pow(t,4);double py4=px4; //Partials of original x & y
+	// 		double pdx2=6*(4*pow(t,3)-6*pow(t,2)+2*t);double pdx3=4*(-4*pow(t,3)+3*pow(t,2));double pdy3=pdx3;double pdx4=4*pow(t,3);double pdy4=pdx4; //X_dot & y_dot
+	// 		double pddx2=6*(12*pow(t,2)-12*t+2);double pddx3=4*(-12*pow(t,2)+6*t);double pddy3=pddx3;double pddx4=12*pow(t,2);double pddy4=pddx4; //x_ddot & y_ddot
+	// 		double pdddx2=6*(24*t-12);double pdddx3=4*(-24*t+6);double pdddy3=pdddx3;double pdddx4=24*t;double pdddy4=pdddx4; //x_dddot & y_dddot
+			
+	// 		double pcurvx2=((y_ddot*pdx2-y_dot*pddx2)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx2*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
+	// 		double pcurvx3=((y_ddot*pdx3-y_dot*pddx3)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
+	// 		double pcurvy3=((x_dot*pddy3-x_ddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
+	// 		double pcurvx4=((y_ddot*pdx4-y_dot*pddx4)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
+	// 		double pcurvy4=((x_dot*pddy4-x_ddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
+			
+	// 		double num_pdcurvx2=(y_dddot*pdx2-y_dot*pdddx2)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx2*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx2+x_ddot*pdx2)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx2-y_dot*pddx2)*(x_dot*x_ddot+y_dot*y_ddot));
+	// 		double num_pdcurvx3=(y_dddot*pdx3-y_dot*pdddx3)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx3*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx3+x_ddot*pdx3)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx3-y_dot*pddx3)*(x_dot*x_ddot+y_dot*y_ddot));
+	// 		double num_pdcurvy3=(x_dot*pdddy3-x_dddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy3*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy3+y_ddot*pdy3)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy3-x_ddot*pdy3)*(x_dot*x_ddot+y_dot*y_ddot));
+	// 		double num_pdcurvx4=(y_dddot*pdx4-y_dot*pdddx4)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx4*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx4+x_ddot*pdx4)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx4-y_dot*pddx4)*(x_dot*x_ddot+y_dot*y_ddot));
+	// 		double num_pdcurvy4=(x_dot*pdddy4-x_dddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy4*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy4+y_ddot*pdy4)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy4-x_ddot*pdy4)*(x_dot*x_ddot+y_dot*y_ddot));
+
+	// 		double pdcurvx2=(num_pdcurvx2*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx2)/pow(pow(x_dot,2)+pow(y_dot,2),5);
+	// 		double pdcurvx3=(num_pdcurvx3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
+	// 		double pdcurvy3=(num_pdcurvy3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
+	// 		double pdcurvx4=(num_pdcurvx4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
+	// 		double pdcurvy4=(num_pdcurvy4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
+
+
+	// 		//Max and min velocity
+	// 		result1[9*i]=pow(x_dot,2)+pow(y_dot,2)-pow(max_v,2)*pow(t_end,2);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i,i,grad[(9*i)*n+3],(result1[9*i]-result[9*i])/hval);
+	// 		result1[9*i+1]=-pow(x_dot,2)-pow(y_dot,2)+pow(min_v,2)*pow(t_end,2);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+1,i,grad[(9*i+1)*n+3],(result1[9*i+1]-result[9*i+1])/hval);
+
+	// 		//Max change (+ & -) in velocity
+	// 		result1[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+2,i,grad[(9*i+2)*n+3],(result1[9*i+2]-result[9*i+2])/hval);
+	// 		result1[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+3,i,grad[(9*i+3)*n+3],(result1[9*i+3]-result[9*i+3])/hval);
+
+	// 		//Max (+ & -) curvature
+	// 		result1[9*i+4]=wheelbase*curv-tan(max_delta);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+4,i,grad[(9*i+4)*n+3],(result1[9*i+4]-result[9*i+4])/hval);
+	// 		result1[9*i+5]=-wheelbase*curv-tan(max_delta);
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+5,i,grad[(9*i+5)*n+3],(result1[9*i+5]-result[9*i+5])/hval);
+
+	// 		//Max change (+ & -) in curvature
+	// 		result1[9*i+6]=wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+6,i,grad[(9*i+6)*n+3],(result1[9*i+6]-result[9*i+6])/hval);
+	// 		result1[9*i+7]=-wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+7,i,grad[(9*i+7)*n+3],(result1[9*i+7]-result[9*i+7])/hval);
+
+	// 		//Smooth minimum obstacle distance
+	// 		for(int j=0;j<cols-7;j++){
+	// 			double dist1= pow(pow(bez_curv1[i][0]-xopt[0][j+7],2)+pow(bez_curv1[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
+	// 			result1[9*i+8]=result1[9*i+8]+exp(-1*double(bez_beta)*dist1);
+
+	// 		}
+			
+
+	// 		result1[9*i+8]=1.0/double(bez_beta)*log(result1[9*i+8])+bez_min_dist;
+	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+8,i,grad[(9*i+8)*n+3],(result1[9*i+8]-result[9*i+8])/hval);
+			
+	// 	}
+	// }
+
+
 
 }
 
@@ -1197,7 +1302,7 @@ class GapBarrier
 				cv_image_data.encoding=img->encoding;
 				cv_image_data.is_bigendian=img->is_bigendian;
 				cv_image_data.step=img->step;
-				cv_image_data.data=img->data;
+				cv_image_data.data=std::vector<uint8_t>(img->data.begin(), img->data.end());
 				cv_image_data_defined=true;
 			}
 			else
@@ -1486,7 +1591,7 @@ class GapBarrier
 
 			//1. Determine a point on the plane
 
-			float3 plane_point={ 0 , 0 , 1/groundplane.C*-groundplane.D };
+			float3 plane_point={ 0 , 0 , 1.0/groundplane.C*-groundplane.D };
 
 			//2. Compute a vector pointing from on the plane to the point in space
 
@@ -1786,7 +1891,7 @@ class GapBarrier
 			// 	}
 				
 			// }
-			printf("%lf -> %lf\n",lidar_transform_angles[start_i],lidar_transform_angles[end_i]);
+
 			best_heading=(lidar_transform_angles[start_i]+lidar_transform_angles[end_i])/2;
 
 			return best_heading; 
@@ -2603,8 +2708,8 @@ class GapBarrier
 					theta_refs[num_MPC]=theta_ref;
 					//For first, drive 3/4 of the way, second drive the last 1/4 since first three points are fixed
 					if(num_MPC==0){
-						xpt=xpt+vel_adapt*bez_t_end*3/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
-						ypt=ypt+vel_adapt*bez_t_end*3/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
+						xpt=xpt+vel_adapt*bez_t_end*3.0/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
+						ypt=ypt+vel_adapt*bez_t_end*3.0/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
 					}
 					else{
 						xpt=xpt+vel_adapt*bez_t_end/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
@@ -2705,7 +2810,7 @@ class GapBarrier
 				}
 
 				double bez_x1=vel_adapt/4*bez_t_end; //Set the fixed point values here
-				double bez_y2=4/3*pow(bez_x1,2)*tan(last_delta)/wheelbase; //last_delta based on optimization in sim, actual value returned by vesc in exp
+				double bez_y2=4.0/3.0*pow(bez_x1,2)*tan(last_delta)/wheelbase; //last_delta based on optimization in sim, actual value returned by vesc in exp
 
 				std::vector<double> opt_params1;
 				std::vector<double> opt_params2;
@@ -2735,12 +2840,12 @@ class GapBarrier
 				double x[bez_ctrl_pts*2-5];  /* `*`some` `initial` `guess`*` */
 
 				//Try new attempt at initial guess
-				x[0]=xptplot[0]*2/3; //x2
+				x[0]=xptplot[0]*2.0/3.0; //x2
 				x[1]=xptplot[0]; //x3
 				x[2]=yptplot[0]; //y3
 				x[3]=xptplot[1]; //x4
 				x[4]=yptplot[1]; //y4
-				// printf("%lf, %lf, %lf, %lf\n",xptplot[0],yptplot[0],xptplot[1],yptplot[1]);
+				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
 
 				int successful_opt=0;
 
@@ -2750,7 +2855,7 @@ class GapBarrier
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
 				ros::Time ott2 = ros::Time::now();
 				double opt_time2 = ott2.toSec();
-				printf("Opt Time: %lf\n",opt_time2-opt_time1);
+				// printf("Opt Time: %lf\n",opt_time2-opt_time1);
 
 				double bez_x2=0;
 				double bez_x3=0;
@@ -2766,7 +2871,7 @@ class GapBarrier
 				}
 
 				if (optim < 0) {
-					ROS_INFO("Optimization Error");
+					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
 
 				}
 				else {
@@ -2796,6 +2901,7 @@ class GapBarrier
 							break;
 						}
 					}
+					
 					double t= t_des;
 					double x_dot=4*bez_x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*x[3]*pow(t,3);
 					double x_ddot=4*bez_x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*x[3]*pow(t,2);
@@ -2810,16 +2916,36 @@ class GapBarrier
 
 					last_delta=atan2(curv*wheelbase,1);
 					vel_adapt=pow(pow(x_dot,2)+pow(y_dot,2),0.5)/bez_t_end;
-					printf("%lf, %lf Delta Vel\n",last_delta,vel_adapt);
 
+
+					//Find minimum distance
+					double min_dist1=100;
+					for(int i=1; i<bez_curv_pts;i++){
+						t=double(i)/double(bez_curv_pts-1);
+						double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
+						double new_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
+						for(int j=0; j<num_obs;j++){
+							double my_dist=pow(pow(new_x-sub_bez_obs[j][0],2)+pow(new_y-sub_bez_obs[j][1],2),0.5);
+							if(my_dist<min_dist1){
+								min_dist1=my_dist;
+							}
+						}
+					}
+					printf("MinDist: %lf\n",min_dist1);
+					//FIX OPT -4 ROUNDOFF ERRORS, IF NOT, CAN USE THOSE OPT VARIABLES (DON'T DISCARD FOR ALL OPTIM<0 AS ABOVE)
+					//GOT A NAN ERROR WHEN CAR WAS BY CORNER, THROUGHLY TEST TO STOP CRASHES OCCURRING SOMETIMES
+					//STILL SCALING ISSUES WITH ALPHA & BETA?
+
+
+					// printf("%lf, %lf %lf, %lf, %lf Delta Vel\n",last_delta,vel_adapt,curv*wheelbase,dist_des,t);
+					// printf("(%lf,0), (%lf,%lf), (%lf,%lf), (%lf,%lf)",bez_x1,bez_x2,bez_y2,bez_x3,bez_y3,bez_x4,bez_y4);
+					
 				}
 				if(minf<5 && startcheck==0){
 					startcheck=1;
 				}
 
 				nlopt_destroy(opt);
-
-
 
 
 				//Publish the optimal path via NLOPT
@@ -3010,6 +3136,9 @@ class GapBarrier
 
 				velocity_MPC = velocity_scale*vel_adapt; //Implement slowing if we near an obstacle
 
+				velocity_MPC=std::max(vel_adapt,min_speed); //REMOVE
+
+				vel_adapt=velocity_MPC;
 
 			}
 
