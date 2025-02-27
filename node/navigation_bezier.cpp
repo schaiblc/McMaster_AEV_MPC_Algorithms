@@ -208,7 +208,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	int nanflag=0;
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
-		double t=double(i)/double(bez_curv_pts-1);
+		double t=double(i)/double(bez_curv_pts);
 		double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*x[3];
 		double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
 		bez_curv.push_back({bez_x,bez_y});
@@ -227,7 +227,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	}
 
 	for(int i=0;i<bez_curv_pts; i++){
-		double t=double(i)/double(bez_curv_pts-1);
+		double t=double(i)/double(bez_curv_pts);
 		double x_dot=4*x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*x[3]*pow(t,3);
 		double x_ddot=4*x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*x[3]*pow(t,2);
 		double x_dddot=4*x1*(-24*t+18)+6*x[0]*(24*t-12)+4*x[1]*(-24*t+6)+24*x[3]*t;
@@ -284,6 +284,9 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		//Max change (+ & -) in velocity
 		result[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
 		result[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
+		if(isnan(result[9*i+2])){
+			printf("NAN %lf, %lf, %lf, %lf, %lf, %lf\n",t,x[0],x[1],x[2],x[3],x[4]);
+		}
 
 		if(grad){
 	/*+_x2*/grad[(9*i+2)*n]=2*(x_dot*x_ddot+y_dot*y_ddot)*((pdx2*x_ddot+pddx2*x_dot)*(pow(x_dot,2)+pow(y_dot,2))-x_dot*pdx2*(x_dot*x_ddot+y_dot*y_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2);
@@ -642,7 +645,7 @@ class GapBarrier
 		int bez_curv_pts=0;
 		double bez_alpha=0;
 		int bez_beta=0;
-		int bez_min_dist=0;
+		double bez_min_dist=0;
 		double bez_t_end=0;
 		double obs_sep=0;
 		double max_obs=0;
@@ -1807,14 +1810,24 @@ class GapBarrier
 		std::vector<float> preprocess_lidar_MPC(std::vector<float> ranges, std::vector<double> lidar_angles){
 			left_ind_MPC = 0; right_ind_MPC = 0;
 			//sets distance to zero for obstacles in safe distance, and max_lidar_range for those that are far.
-			for(int i =0; i < ranges.size(); ++i){
-				if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
-				if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
-				if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
-					if(ranges[i] <= safe_distance) {ranges[i] = 0;}
-					else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range;}
+			int num_det=0;
+			double safe_dist=safe_distance;
+			std::vector<float> ranges1=ranges;
+			while(num_det==0){
+				num_det=0;
+				left_ind_MPC = 0; right_ind_MPC = 0;
+				ranges=ranges1;
+				for(int i =0; i < ranges.size(); ++i){
+					if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+					if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
+					if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
+						if(ranges[i] <= safe_dist) {ranges[i] = 0;}
+						else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
+						else{num_det++;}
+					}
+					
 				}
-				
+				safe_dist=safe_dist/2;
 			}
 			left_ind_MPC -=1;
 			return ranges;
@@ -1876,6 +1889,7 @@ class GapBarrier
 					}
 				}
 			}
+			
 			return std::make_pair(str_indx2, end_indx2);
 		}
 
@@ -2574,6 +2588,9 @@ class GapBarrier
 
 						heading_angle_MPC= find_best_point_MPC(str_indx_MPC, end_indx_MPC, proc_ranges_MPC,lidar_transform_angles_tot);
 						heading_angle=heading_angle_MPC;
+						
+						printf("HEADING %d, %lf\n",num_MPC,heading_angle);
+						
 						if(num_MPC==0){
 					
 							float mod_angle_al_MPC = angle_al-M_PI + heading_angle_MPC;
@@ -2719,6 +2736,7 @@ class GapBarrier
 					
 					xptplot[num_MPC]=xpt;
 					yptplot[num_MPC]=ypt;
+					printf("THETA %d, %lf\n",num_MPC,theta_ref);
 
 				
 					if(num_MPC<nMPC-1){//Prepare LIDAR data for next iteration, no longer constantly spaced lidar angles	
@@ -2877,7 +2895,7 @@ class GapBarrier
 				else {
 					successful_opt=1;
 					//Save the control points here
-					// printf("%lf, %lf, %lf, %lf, %lf SOLVED\n",x[0],x[1],x[2],x[3],x[4]);
+					printf("%lf, %lf, %lf, %lf, %lf SOLVED\n",x[0],x[1],x[2],x[3],x[4]);
 					bez_x2=x[0];
 					bez_x3=x[1];
 					bez_y3=x[2];
@@ -2921,7 +2939,7 @@ class GapBarrier
 					//Find minimum distance
 					double min_dist1=100;
 					for(int i=1; i<bez_curv_pts;i++){
-						t=double(i)/double(bez_curv_pts-1);
+						t=double(i)/double(bez_curv_pts);
 						double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
 						double new_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
 						for(int j=0; j<num_obs;j++){
@@ -2935,15 +2953,13 @@ class GapBarrier
 					//FIX OPT -4 ROUNDOFF ERRORS, IF NOT, CAN USE THOSE OPT VARIABLES (DON'T DISCARD FOR ALL OPTIM<0 AS ABOVE)
 					//GOT A NAN ERROR WHEN CAR WAS BY CORNER, THROUGHLY TEST TO STOP CRASHES OCCURRING SOMETIMES
 					//STILL SCALING ISSUES WITH ALPHA & BETA?
-
+					
 
 					// printf("%lf, %lf %lf, %lf, %lf Delta Vel\n",last_delta,vel_adapt,curv*wheelbase,dist_des,t);
 					// printf("(%lf,0), (%lf,%lf), (%lf,%lf), (%lf,%lf)",bez_x1,bez_x2,bez_y2,bez_x3,bez_y3,bez_x4,bez_y4);
 					
 				}
-				if(minf<5 && startcheck==0){
-					startcheck=1;
-				}
+				startcheck=1;
 
 				nlopt_destroy(opt);
 
@@ -3149,6 +3165,7 @@ class GapBarrier
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
 					drive_msg.drive.speed = velocity_MPC; //velocity_MPC
+					printf("VEL: %lf\n",velocity_MPC);
 				}
 				else{
 					drive_msg.drive.speed = 0;

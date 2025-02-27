@@ -1521,14 +1521,24 @@ class GapBarrier
 		std::vector<float> preprocess_lidar_MPC(std::vector<float> ranges, std::vector<double> lidar_angles){
 			left_ind_MPC = 0; right_ind_MPC = 0;
 			//sets distance to zero for obstacles in safe distance, and max_lidar_range for those that are far.
-			for(int i =0; i < ranges.size(); ++i){
-				if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
-				if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
-				if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
-					if(ranges[i] <= safe_distance) {ranges[i] = 0;}
-					else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range;}
+			int num_det=0;
+			double safe_dist=safe_distance;
+			std::vector<float> ranges1=ranges;
+			while(num_det==0){
+				num_det=0;
+				left_ind_MPC = 0; right_ind_MPC = 0;
+				ranges=ranges1;
+				for(int i =0; i < ranges.size(); ++i){
+					if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+					if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
+					if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
+						if(ranges[i] <= safe_dist) {ranges[i] = 0;}
+						else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
+						else{num_det++;}
+					}
+					
 				}
-				
+				safe_dist=safe_dist/2;
 			}
 			left_ind_MPC -=1;
 			return ranges;
