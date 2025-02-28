@@ -1817,15 +1817,25 @@ class GapBarrier
 				num_det=0;
 				left_ind_MPC = 0; right_ind_MPC = 0;
 				ranges=ranges1;
-				for(int i =0; i < ranges.size(); ++i){
-					if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
-					if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
-					if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
-						if(ranges[i] <= safe_dist) {ranges[i] = 0;}
-						else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
-						else{num_det++;}
+				if(safe_dist<0.1){
+					num_det=1;
+					for(int i =0; i < ranges.size(); ++i){
+						if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
 					}
-					
+					left_ind_MPC +=1;
+				}
+				else{
+					for(int i =0; i < ranges.size(); ++i){
+						if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
+						if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
+							if(ranges[i] <= safe_dist) {ranges[i] = 0;}
+							else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
+							else{num_det++;}
+						}
+						
+					}
 				}
 				safe_dist=safe_dist/2;
 			}
@@ -2725,12 +2735,12 @@ class GapBarrier
 					theta_refs[num_MPC]=theta_ref;
 					//For first, drive 3/4 of the way, second drive the last 1/4 since first three points are fixed
 					if(num_MPC==0){
-						xpt=xpt+vel_adapt*bez_t_end*3.0/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
-						ypt=ypt+vel_adapt*bez_t_end*3.0/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
+						xpt=xpt+std::max(vel_adapt,min_speed)*bez_t_end*3.0/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
+						ypt=ypt+std::max(vel_adapt,min_speed)*bez_t_end*3.0/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
 					}
 					else{
-						xpt=xpt+vel_adapt*bez_t_end/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
-						ypt=ypt+vel_adapt*bez_t_end/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
+						xpt=xpt+std::max(vel_adapt,min_speed)*bez_t_end/(bez_ctrl_pts-1)*cos(theta_ref); //Drive message relates to lidar callback scan topic, ~10Hz
+						ypt=ypt+std::max(vel_adapt,min_speed)*bez_t_end/(bez_ctrl_pts-1)*sin(theta_ref); //Use 13 Hz as absolute optimal but likely slower use dt
 					}
 					
 					
@@ -2827,7 +2837,7 @@ class GapBarrier
 					nlopt_set_upper_bound(opt, i, max_lidar_range);
 				}
 
-				double bez_x1=vel_adapt/4*bez_t_end; //Set the fixed point values here
+				double bez_x1=std::max(vel_adapt,min_speed)/4*bez_t_end; //Set the fixed point values here
 				double bez_y2=4.0/3.0*pow(bez_x1,2)*tan(last_delta)/wheelbase; //last_delta based on optimization in sim, actual value returned by vesc in exp
 
 				std::vector<double> opt_params1;
@@ -2903,7 +2913,7 @@ class GapBarrier
 					bez_y4=x[4];
 					//Integrate over curve until next sample to obtain v, delta
 					double dist_trav=0;
-					double dist_des=vel_adapt*std::max(default_dt,dt);
+					double dist_des=std::max(vel_adapt,min_speed)*std::max(default_dt,dt);
 					double t_des=0;
 					double last_x=0; double last_y=0;
 					for(int i=1; i<bez_curv_pts*100;i++){
@@ -2933,7 +2943,7 @@ class GapBarrier
 					double curv_dot=((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))/pow((pow(x_dot,2)+pow(y_dot,2)),2.5);
 
 					last_delta=atan2(curv*wheelbase,1);
-					vel_adapt=pow(pow(x_dot,2)+pow(y_dot,2),0.5)/bez_t_end;
+					vel_adapt=std::min(pow(pow(x_dot,2)+pow(y_dot,2),0.5)/bez_t_end,max_speed);
 
 
 					//Find minimum distance
@@ -2950,9 +2960,6 @@ class GapBarrier
 						}
 					}
 					printf("MinDist: %lf\n",min_dist1);
-					//FIX OPT -4 ROUNDOFF ERRORS, IF NOT, CAN USE THOSE OPT VARIABLES (DON'T DISCARD FOR ALL OPTIM<0 AS ABOVE)
-					//GOT A NAN ERROR WHEN CAR WAS BY CORNER, THROUGHLY TEST TO STOP CRASHES OCCURRING SOMETIMES
-					//STILL SCALING ISSUES WITH ALPHA & BETA?
 					
 
 					// printf("%lf, %lf %lf, %lf, %lf Delta Vel\n",last_delta,vel_adapt,curv*wheelbase,dist_des,t);
@@ -3144,7 +3151,7 @@ class GapBarrier
 					if(fused_ranges[i] < min_distance) min_distance = fused_ranges[i];
 				}
 
-				velocity_scale = 1 - exp(-std::max(min_distance-stop_distance,0.0)/stop_distance_decay); //2 factor ensures we only slow when appropriate, otherwise MPC behaviour dominates
+				velocity_scale = 1 - exp(-std::max(min_distance-stop_distance,0.0)/stop_distance_decay); //factor ensures we only slow when appropriate, otherwise MPC behaviour dominates
 				
 				// ROS_INFO("%.3f", velocity);
 
@@ -3152,9 +3159,10 @@ class GapBarrier
 
 				velocity_MPC = velocity_scale*vel_adapt; //Implement slowing if we near an obstacle
 
-				velocity_MPC=std::max(vel_adapt,min_speed); //REMOVE
+				// velocity_MPC=std::max(vel_adapt,min_speed); //REMOVE
 
 				vel_adapt=velocity_MPC;
+				printf("SLOW %lf%% %lf m/s %lf m\n",velocity_scale*100,velocity_MPC,min_distance);
 
 			}
 
