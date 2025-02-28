@@ -52,6 +52,7 @@ private:
 
     // The car state and parameters
     CarState state;
+    Pose2D state_det; //State of the other vehicle detected
     double previous_seconds;
     double scan_distance_to_base_link;
     double max_speed, max_steering_angle;
@@ -60,6 +61,7 @@ private:
     double accel, steer_angle_vel;
     CarParams params;
     double width;
+    double update_pose_rate=1;
 
     // A simulator of the laser
     ScanSimulator2D scan_simulator;
@@ -135,6 +137,7 @@ public:
 
         // Initialize car state and driving commands
         state = {.x=0, .y=0, .theta=0, .velocity=0, .steer_angle=0.0, .angular_velocity=0.0, .slip_angle=0.0, .st_dyn=false};
+        state_det.x=2; state_det.y=0; state_det.theta=0;
         accel = 0.0;
         steer_angle_vel = 0.0;
         desired_speed = 0.0;
@@ -163,7 +166,7 @@ public:
 
         // Fetch the car parameters
         int scan_beams;
-        double update_pose_rate, scan_std_dev;
+        double scan_std_dev;
         n.getParam("wheelbase", params.wheelbase);
         n.getParam("update_pose_rate", update_pose_rate);
         n.getParam("scan_beams", scan_beams);
@@ -343,6 +346,17 @@ public:
 
         // TODO: make and publish IMU message
         pub_imu(timestamp);
+
+        //Update state of vehicle detected and publish
+        //////////////////////////////////////////////
+        state_det.x+=0.2*update_pose_rate;
+
+        pub_pose_det_transform(timestamp);
+
+
+
+
+        //////////////////////////////////////////////
 
 
         /// KEEP in sim
@@ -648,6 +662,45 @@ public:
             }
         }
 
+
+        void pub_pose_det_transform(ros::Time timestamp) {
+            // Convert the pose into a transformation
+            geometry_msgs::Transform t;
+            t.translation.x = state_det.x;
+            t.translation.y = state_det.y;
+            tf2::Quaternion quat;
+            quat.setEuler(0., 0., state_det.theta);
+            t.rotation.x = quat.x();
+            t.rotation.y = quat.y();
+            t.rotation.z = quat.z();
+            t.rotation.w = quat.w();
+
+            // publish ground truth pose
+            geometry_msgs::PoseStamped ps;
+            ps.header.frame_id = "/map";
+            ps.pose.position.x = state_det.x;
+            ps.pose.position.y = state_det.y;
+            ps.pose.orientation.x = quat.x();
+            ps.pose.orientation.y = quat.y();
+            ps.pose.orientation.z = quat.z();
+            ps.pose.orientation.w = quat.w();
+
+            // Add a header to the transformation
+            geometry_msgs::TransformStamped ts;
+            ts.transform = t;
+            ts.header.stamp = timestamp;
+            ts.header.frame_id = map_frame;
+            ts.child_frame_id = "det_racecar_base_link";
+
+            // Publish them
+            if (broadcast_transform) {
+                br.sendTransform(ts);
+            }
+            if (pub_gt_pose) {
+                pose_pub.publish(ps);
+            }
+        }
+
         void pub_steer_ang_transform(ros::Time timestamp) {
             // Set the steering angle to make the wheels move
             // Publish the steering angle
@@ -665,6 +718,21 @@ public:
             ts_wheel.header.frame_id = "front_right_hinge";
             ts_wheel.child_frame_id = "front_right_wheel";
             br.sendTransform(ts_wheel);
+
+            quat_wheel.setEuler(0., 0., 0);
+            ts_wheel.transform.rotation.x = 0;
+            ts_wheel.transform.rotation.y = 0;
+            ts_wheel.transform.rotation.z = 0;
+            ts_wheel.transform.rotation.w = 1;
+            ts_wheel.header.stamp = timestamp;
+            ts_wheel.header.frame_id = "det_racecar_front_left_hinge";
+            ts_wheel.child_frame_id = "det_racecar_front_left_wheel";
+            br.sendTransform(ts_wheel);
+            ts_wheel.header.frame_id = "det_racecar_front_right_hinge";
+            ts_wheel.child_frame_id = "det_racecar_front_right_wheel";
+            br.sendTransform(ts_wheel);
+
+
         }
 
         void pub_laser_link_transform(ros::Time timestamp) {
