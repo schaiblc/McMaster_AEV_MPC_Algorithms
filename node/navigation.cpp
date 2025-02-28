@@ -704,17 +704,57 @@ class GapBarrier
 					maptheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
 					updated=1;
 				}
-				// if(transform.header.frame_id == "map" && transform.child_frame_id == "base_link"){ //This is for simulation only
-				// 	simx=transform.transform.translation.x;
-				// 	simy=transform.transform.translation.y;
-				// 	// 		transform.transform.translation.z);
-				// 	double x=transform.transform.rotation.x;
-				// 	double y=transform.transform.rotation.y;
-				// 	double z=transform.transform.rotation.z;
-				// 	double w=transform.transform.rotation.w;
-				// 	simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-				// 	// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
-				// }
+				else if (transform.header.frame_id == "map" && transform.child_frame_id == "det_racecar_base_link") //Simulation detection of other vehicle
+				{
+					//Just for the one vehicle detection case
+					double robx=transform.transform.translation.x;
+					double roby=transform.transform.translation.y;
+					// 		transform.transform.translation.z);
+					double x=transform.transform.rotation.x;
+					double y=transform.transform.rotation.y;
+					double z=transform.transform.rotation.z;
+					double w=transform.transform.rotation.w;
+					double robtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+
+					double detx=(robx-simx)*cos(simtheta)+(roby-simy)*sin(simtheta);
+					double dety=-(robx-simx)*sin(simtheta)+(roby-simy)*cos(simtheta);
+
+					tf_data new_tf;
+					new_tf.tf_x=simx; new_tf.tf_y=simy; new_tf.tf_theta=simtheta; new_tf.tf_time=ros::Time::now().toSec();
+					if(car_detects.size()<1){
+						vehicle_detection new_det;
+						new_det.bound_box={0,0,20,20}; //ymin, xmin, ymax, xmax PLACEHOLDERS
+						new_det.meas={detx,dety};
+						new_det.last_det=1;
+						new_det.meas_tf=new_tf;
+						new_det.cov_P(0,0)=0.01; new_det.cov_P(1,1)=0.01; new_det.cov_P(2,2)=std::pow(5 * M_PI / 180, 2);
+						new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(5 * M_PI / 180, 2);
+						new_det.proc_noise=new_det.cov_P;
+		
+						car_detects.push_back(new_det);
+					}
+					else{
+						car_detects[0].bound_box={0,0,20,20}; //ymin, xmin, ymax, xmax PLACEHOLDERS
+						car_detects[0].meas={detx,dety};
+						car_detects[0].last_det=1; //Detected in this round
+						car_detects[0].meas_tf=new_tf;
+					}
+
+
+				}
+				else if(transform.header.frame_id == "map" && transform.child_frame_id == "base_link"){ //This is for simulation only
+					vel_adapt=velocity_MPC; //In simulation, adaptive velocity is based on our input, not VESC since not connected
+					
+					simx=transform.transform.translation.x;
+					simy=transform.transform.translation.y;
+					// 		transform.transform.translation.z);
+					double x=transform.transform.rotation.x;
+					double y=transform.transform.rotation.y;
+					double z=transform.transform.rotation.z;
+					double w=transform.transform.rotation.w;
+					simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+					// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
+				}
 			}
 			if(updated){
 				locx=mapx+cos(maptheta)*odomx-sin(maptheta)*odomy;
@@ -1528,15 +1568,25 @@ class GapBarrier
 				num_det=0;
 				left_ind_MPC = 0; right_ind_MPC = 0;
 				ranges=ranges1;
-				for(int i =0; i < ranges.size(); ++i){
-					if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
-					if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
-					if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
-						if(ranges[i] <= safe_dist) {ranges[i] = 0;}
-						else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
-						else{num_det++;}
+				if(safe_dist<0.1){
+					num_det=1;
+					for(int i =0; i < ranges.size(); ++i){
+						if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
 					}
-					
+					left_ind_MPC +=1;
+				}
+				else{
+					for(int i =0; i < ranges.size(); ++i){
+						if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
+						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
+						if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
+							if(ranges[i] <= safe_dist) {ranges[i] = 0;}
+							else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
+							else{num_det++;}
+						}
+						
+					}
 				}
 				safe_dist=safe_dist/2;
 			}
@@ -1867,6 +1917,9 @@ class GapBarrier
 			for(int i=0; i<car_detects.size();i++){ //For each detection, plot trajectory over next 3 seconds	
 				if(car_detects[i].init<2) continue;
 				double x_det=car_detects[i].state[0]; double y_det=car_detects[i].state[1]; double theta_det=car_detects[i].state[2];
+				if(simx!=0){ //Simulation mode active, transform to map reference
+					vehicle_detect_path.header.frame_id = "map";
+				}
 				for (int traj=0;traj<40;traj++){
 					p7.x = x_det;	p7.y = y_det;	p7.z = 0;
 					vehicle_detect_path.points.push_back(p7);
@@ -2290,7 +2343,6 @@ class GapBarrier
 						}
 
 					}
-
 
 					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot);
 					
