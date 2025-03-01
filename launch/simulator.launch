@@ -6,7 +6,7 @@
   </node>
 
   <!-- Launch a map from the maps folder-->
-  <arg name="map" default="$(find f1tenth_simulator)/maps/berlin.yaml"/>
+  <arg name="map" default="$(find f1tenth_simulator)/maps/MPC_map.yaml"/>
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
 
   <!-- Launch the racecar model -->
@@ -37,9 +37,17 @@
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
 
-<node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node> -->
+
+  <node pkg="f1tenth_simulator" name="navigation_bezier" type="navigation_bezier" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
+
+  <!-- <node pkg="f1tenth_simulator" name="navigation_velocity" type="navigation_velocity" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node> -->
 
  <node pkg="f1tenth_simulator" name="collision_assistance" type="collision_assistance.py" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
