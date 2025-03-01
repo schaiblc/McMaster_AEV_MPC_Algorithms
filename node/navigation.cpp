@@ -1917,9 +1917,7 @@ class GapBarrier
 			for(int i=0; i<car_detects.size();i++){ //For each detection, plot trajectory over next 3 seconds	
 				if(car_detects[i].init<2) continue;
 				double x_det=car_detects[i].state[0]; double y_det=car_detects[i].state[1]; double theta_det=car_detects[i].state[2];
-				if(simx!=0){ //Simulation mode active, transform to map reference
-					vehicle_detect_path.header.frame_id = "map";
-				}
+				
 				for (int traj=0;traj<40;traj++){
 					p7.x = x_det;	p7.y = y_det;	p7.z = 0;
 					vehicle_detect_path.points.push_back(p7);
@@ -1995,17 +1993,29 @@ class GapBarrier
 					double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 
 					// printf("Last KF state (og frame): %lf, %lf\n",car_detects[q].state[0],car_detects[q].state[1]);
-					tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-						sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
-					tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-						cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+					if(simx==0){
+						tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+							sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+						tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+							cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
 
-					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
+						car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
 
-					curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-						sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
-					curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-						cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+						curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+							sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+						curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+							cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					}
+					else{
+						tempx=cos(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+							sin(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+						tempy=-sin(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+							cos(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+
+						car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
+						curmeasx=car_detects[q].meas[0];
+						curmeasy=car_detects[q].meas[1];
+					}
 
 					car_detects[q].state[4]=0; //steering angle, depends on process noise
 					car_detects[q].state[3]=std::min(sqrt(pow(curmeasx-car_detects[q].state[0],2)+pow(curmeasy-car_detects[q].state[1],2))/dt,0.3); //Cap initial at 3 m/s so we don't get extreme values upon initialization
@@ -2032,21 +2042,35 @@ class GapBarrier
 				//First transform last x, y & theta to this new frame (also the measurements)
 				double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 				
-				tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-					sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
-				tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-					cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+				if(simx==0){
+					tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+						sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+					tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+						cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
 
-				car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(odomtheta-lasttheta);
-				while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
-				while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
+					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(odomtheta-lasttheta);
+					while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
+					while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
 
-				curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-					sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
-				curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-					cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+						sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+						cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
 
-				car_detects[q].meas[0]=curmeasx; car_detects[q].meas[1]=curmeasy;
+					car_detects[q].meas[0]=curmeasx; car_detects[q].meas[1]=curmeasy;
+				}
+				else{
+					tempx=cos(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+						sin(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+					tempy=-sin(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+						cos(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+
+					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(simtheta-lasttheta);
+					while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
+					while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
+					curmeasx=car_detects[q].meas[0];
+					curmeasy=car_detects[q].meas[1];
+				}
 				
 				//1) State prediction
 				Eigen::VectorXd pred_state = Eigen::VectorXd::Zero(5); //x, y, theta, vs, delta
@@ -2144,6 +2168,7 @@ class GapBarrier
 			}
 
 			lastx=odomx; lasty=odomy; lasttheta=odomtheta; //Keep our vehicle frame from last cycle to transform frame to new this cycle
+			if(simx!=0){lastx=simx; lasty=simy; lasttheta=simtheta;}
 			timestamp_tf2=timestamp_tf1; timestamp_cam2=timestamp_cam1;
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
 			// printf("**********************\n\n");
