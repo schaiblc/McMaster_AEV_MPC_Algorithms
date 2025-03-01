@@ -554,6 +554,7 @@ class GapBarrier
 		int right_ind_MPC, left_ind_MPC;
 		int ls_str, ls_end, ls_len_mod, ls_len_mod2; double ls_fov, angle_cen, ls_ang_inc;
 		double max_lidar_range, safe_distance;
+		double safe_distance_adapt;
 
 		//obstacle point detection
 		std::string drive_state; 
@@ -731,6 +732,7 @@ class GapBarrier
 			nf.getParam("left_beam_angle", left_beam_angle);
 			nf.getParam("scan_range", max_lidar_range);
 			nf.getParam("safe_distance", safe_distance);
+			safe_distance_adapt=safe_distance;
 
 			//lidar init
 			right_beam_angle_MPC = right_beam_angle-M_PI; //-M_PI/2;
@@ -993,17 +995,54 @@ class GapBarrier
 					maptheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
 					updated=1;
 				}
-				// if(transform.header.frame_id == "map" && transform.child_frame_id == "base_link"){ //This is for simulation only
-				// 	simx=transform.transform.translation.x;
-				// 	simy=transform.transform.translation.y;
-				// 	// 		transform.transform.translation.z);
-				// 	double x=transform.transform.rotation.x;
-				// 	double y=transform.transform.rotation.y;
-				// 	double z=transform.transform.rotation.z;
-				// 	double w=transform.transform.rotation.w;
-				// 	simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-				// 	// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
-				// }
+
+				else if (transform.header.frame_id == "map" && transform.child_frame_id == "det_racecar_base_link") //Simulation detection of other vehicle
+				{
+					//Just for the one vehicle detection case
+					double robx=transform.transform.translation.x;
+					double roby=transform.transform.translation.y;
+					// 		transform.transform.translation.z);
+					double x=transform.transform.rotation.x;
+					double y=transform.transform.rotation.y;
+					double z=transform.transform.rotation.z;
+					double w=transform.transform.rotation.w;
+					double robtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+
+					double detx=(robx-simx)*cos(simtheta)+(roby-simy)*sin(simtheta);
+					double dety=-(robx-simx)*sin(simtheta)+(roby-simy)*cos(simtheta);
+
+					tf_data new_tf;
+					new_tf.tf_x=simx; new_tf.tf_y=simy; new_tf.tf_theta=simtheta; new_tf.tf_time=ros::Time::now().toSec();
+					if(car_detects.size()<1){
+						vehicle_detection new_det;
+						new_det.bound_box={0,0,20,20}; //ymin, xmin, ymax, xmax PLACEHOLDERS
+						new_det.meas={detx,dety};
+						new_det.last_det=1;
+						new_det.meas_tf=new_tf;
+						new_det.cov_P(0,0)=0.01; new_det.cov_P(1,1)=0.01; new_det.cov_P(2,2)=std::pow(5 * M_PI / 180, 2);
+						new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(5 * M_PI / 180, 2);
+						new_det.proc_noise=new_det.cov_P;
+		
+						car_detects.push_back(new_det);
+					}
+					else{
+						car_detects[0].bound_box={0,0,20,20}; //ymin, xmin, ymax, xmax PLACEHOLDERS
+						car_detects[0].meas={detx,dety};
+						car_detects[0].last_det=1; //Detected in this round
+						car_detects[0].meas_tf=new_tf;
+					}
+				}
+				else if(transform.header.frame_id == "map" && transform.child_frame_id == "base_link"){ //This is for simulation only
+					simx=transform.transform.translation.x;
+					simy=transform.transform.translation.y;
+					// 		transform.transform.translation.z);
+					double x=transform.transform.rotation.x;
+					double y=transform.transform.rotation.y;
+					double z=transform.transform.rotation.z;
+					double w=transform.transform.rotation.w;
+					simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+					// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
+				}
 			}
 			if(updated){
 				locx=mapx+cos(maptheta)*odomx-sin(maptheta)*odomy;
@@ -1727,7 +1766,7 @@ class GapBarrier
 
 			//sets distance to zero for obstacles in safe distance, and max_lidar_range for those that are far.
 			for(int i =0; i < ls_len_mod; ++i){
-				if(ranges[ls_str+i] <= safe_distance) {data[i][0] = 0; data[i][1] = i*ls_ang_inc-angle_cen;}
+				if(ranges[ls_str+i] <= safe_distance_adapt) {data[i][0] = 0; data[i][1] = i*ls_ang_inc-angle_cen;}
 				else if(ranges[ls_str+i] <= max_lidar_range) {data[i][0] = ranges[ls_str+i]; data[i][1] = i*ls_ang_inc-angle_cen;}
 				else {data[i][0] = max_lidar_range; data[i][1] = i*ls_ang_inc-angle_cen;}
 			}
@@ -1811,7 +1850,7 @@ class GapBarrier
 			left_ind_MPC = 0; right_ind_MPC = 0;
 			//sets distance to zero for obstacles in safe distance, and max_lidar_range for those that are far.
 			int num_det=0;
-			double safe_dist=safe_distance;
+			double safe_dist=safe_distance_adapt;
 			std::vector<float> ranges1=ranges;
 			while(num_det==0){
 				num_det=0;
@@ -2167,6 +2206,7 @@ class GapBarrier
 			for(int i=0; i<car_detects.size();i++){ //For each detection, plot trajectory over next 3 seconds	
 				if(car_detects[i].init<2) continue;
 				double x_det=car_detects[i].state[0]; double y_det=car_detects[i].state[1]; double theta_det=car_detects[i].state[2];
+				
 				for (int traj=0;traj<40;traj++){
 					p7.x = x_det;	p7.y = y_det;	p7.z = 0;
 					vehicle_detect_path.points.push_back(p7);
@@ -2235,17 +2275,30 @@ class GapBarrier
 					double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 
 					// printf("Last KF state (og frame): %lf, %lf\n",car_detects[q].state[0],car_detects[q].state[1]);
-					tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-						sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
-					tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-						cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+					if(simx==0){
+						tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+							sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+						tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+							cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
 
-					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
+						car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
 
-					curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-						sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
-					curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-						cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+						curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+							sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+						curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+							cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					}
+					else{
+						tempx=cos(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+							sin(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+						tempy=-sin(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+							cos(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+
+						car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy;
+						curmeasx=car_detects[q].meas[0];
+						curmeasy=car_detects[q].meas[1];
+					}
+
 
 					car_detects[q].state[4]=0; //steering angle, depends on process noise
 					car_detects[q].state[3]=std::min(sqrt(pow(curmeasx-car_detects[q].state[0],2)+pow(curmeasy-car_detects[q].state[1],2))/dt,0.3); //Cap initial at 3 m/s so we don't get extreme values upon initialization
@@ -2272,21 +2325,35 @@ class GapBarrier
 				//First transform last x, y & theta to this new frame (also the measurements)
 				double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 				
-				tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-					sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
-				tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
-					cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+				if(simx==0){
+					tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+						sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
+					tempy=-sin(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
+						cos(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
 
-				car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(odomtheta-lasttheta);
-				while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
-				while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
+					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(odomtheta-lasttheta);
+					while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
+					while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
 
-				curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-					sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
-				curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
-					cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					curmeasx=cos(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+						sin(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
+					curmeasy=-sin(odomtheta)*(car_detects[q].meas_tf.tf_x+car_detects[q].meas[0]*cos(car_detects[q].meas_tf.tf_theta)-car_detects[q].meas[1]*sin(car_detects[q].meas_tf.tf_theta)-odomx)+
+						cos(odomtheta)*(car_detects[q].meas_tf.tf_y+car_detects[q].meas[0]*sin(car_detects[q].meas_tf.tf_theta)+car_detects[q].meas[1]*cos(car_detects[q].meas_tf.tf_theta)-odomy);
 
-				car_detects[q].meas[0]=curmeasx; car_detects[q].meas[1]=curmeasy;
+					car_detects[q].meas[0]=curmeasx; car_detects[q].meas[1]=curmeasy;
+				}
+				else{
+					tempx=cos(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+						sin(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+					tempy=-sin(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
+						cos(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+
+					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(simtheta-lasttheta);
+					while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
+					while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
+					curmeasx=car_detects[q].meas[0];
+					curmeasy=car_detects[q].meas[1];
+				}
 				
 				//1) State prediction
 				Eigen::VectorXd pred_state = Eigen::VectorXd::Zero(5); //x, y, theta, vs, delta
@@ -2378,12 +2445,11 @@ class GapBarrier
 					printf("%d\n",car_detects[q].miss_fr);
 				}
 
-
-
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
 
 			lastx=odomx; lasty=odomy; lasttheta=odomtheta; //Keep our vehicle frame from last cycle to transform frame to new this cycle
+			if(simx!=0){lastx=simx; lasty=simy; lasttheta=simtheta;}
 			timestamp_tf2=timestamp_tf1; timestamp_cam2=timestamp_cam1;
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
 			// printf("**********************\n\n");
@@ -2435,6 +2501,8 @@ class GapBarrier
 
 			if(drive_state == "normal"){
 				std::vector<float> fused_ranges_MPC=fused_ranges;
+				std::vector<float> fused_ranges_MPC_tot0;
+				std::vector<double> lidar_transform_angles_tot0;
 
 
 				double track_line[2][nMPC*kMPC]; //Tracking line a & b (assume c=1) parameters for all time intervals, additional terms for passing n & k
@@ -2510,7 +2578,7 @@ class GapBarrier
 
 						for (int i=0; i<car_detects.size(); i++){
 							if(car_detects[i].init==2){
-								int start_track=num_MPC*kMPC*mult_factor; int end_track=(num_MPC*kMPC+kMPC-1)*mult_factor;
+								int start_track=0; int end_track=((nMPC-1)*kMPC+kMPC-1)*mult_factor; //Use all of the trajectpry in Bezier case
 								double track_x=car_detects[i].state[0]; double track_y=car_detects[i].state[1]; double track_theta=car_detects[i].state[2];
 								//Make a box for the vehicle based on orientation and have this projected path
 								//This ensures that the vehicle is more prominent in LIDAR detections and is more of a box as opposed to the mid-point
@@ -2546,7 +2614,7 @@ class GapBarrier
 												fused_ranges_MPC_veh_det.push_back(pow(pow(edge_x,2)+pow(edge_y,2),0.5));
 												// printf("%d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,theta_ref, xpt, ypt, track_x, track_y, track_theta, tfed_x, tfed_y);
 												// printf(" %d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,top_right[0],top_right[1],top_left[0],top_left[1],bot_left[0],bot_left[1],bot_right[0],bot_right[1]);
-												// printf("  %d, %d, %d, %lf, %lf, %lf\n",num_MPC,q,c1,edge_x,edge_y,tfed_ang);
+												
 											}
 
 										}
@@ -2584,6 +2652,10 @@ class GapBarrier
 
 					}
 
+					if(num_MPC==0){ //Take the original reference points for subsampling obstacles in NLOPT
+						fused_ranges_MPC_tot0=fused_ranges_MPC_tot;
+						lidar_transform_angles_tot0=lidar_transform_angles_tot;
+					}
 
 					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot);
 					
@@ -2788,8 +2860,9 @@ class GapBarrier
 				//Select a subsample of all obstacles
 				std::vector<std::vector<double>> bez_obs;
 				std::vector<std::vector<double>> sub_bez_obs;
-    			bez_obs.insert(bez_obs.end(), obstacle_points_l.begin(), obstacle_points_l.end());
-				bez_obs.insert(bez_obs.end(), obstacle_points_r.begin(), obstacle_points_r.end());
+				for(int i=0;i<fused_ranges_MPC_tot0.size();i++){
+					bez_obs.push_back({fused_ranges_MPC_tot0[i]*cos(lidar_transform_angles_tot0[i]),fused_ranges_MPC_tot0[i]*sin(lidar_transform_angles_tot0[i])});
+				}
 
 				double obs_sep1=obs_sep;
 				int num_obs=100000;
@@ -2808,10 +2881,11 @@ class GapBarrier
 								min_dist=mydist;
 							}
 						}
-						if(min_dist>obs_sep1){
+						if(min_dist>obs_sep1 && pow(pow(x_ob,2)+pow(y_ob,2),0.5)<max_lidar_range_opt){
 							// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
 							// fprintf(file1,"%lf, %lf\n",obstacle[0],obstacle[1]);
 							// fclose(file1);
+							
 							sub_bez_obs.push_back({obstacle[0],obstacle[1]});
 						}
 						
@@ -2822,7 +2896,7 @@ class GapBarrier
 				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
 				// fprintf(file1,"*******************\n");
 				// fclose(file1);
-
+				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
 				opt = nlopt_create(NLOPT_LD_SLSQP, bez_ctrl_pts*2-5); /* algorithm and dimensionality */
@@ -2899,11 +2973,13 @@ class GapBarrier
 				}
 
 				if (optim < 0) {
+					safe_distance_adapt=safe_distance_adapt/2;
 					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
 
 				}
 				else {
 					successful_opt=1;
+					safe_distance_adapt=safe_distance;
 					//Save the control points here
 					printf("%lf, %lf, %lf, %lf, %lf SOLVED\n",x[0],x[1],x[2],x[3],x[4]);
 					bez_x2=x[0];
