@@ -341,7 +341,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		//Smooth minimum obstacle distance
 		for(int j=0;j<cols-7;j++){
 			double dist1= pow(pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
-			result[9*i+8]=result[9*i+8]+exp(-1*double(bez_beta)*dist1);
+			result[9*i+8]=result[9*i+8]+exp(-1.0*double(bez_beta)*dist1);
 			if(result[9*i+8]==0){
 				printf("ZERO %d, %d, %e, %lf, %lf, %lf, %lf\n",i,j,result[9*i+8], bez_curv[i][0],xopt[0][j+7],bez_curv[i][1],xopt[1][j+7]);
 			}
@@ -3035,7 +3035,10 @@ class GapBarrier
 							}
 						}
 					}
-					printf("MinDist: %lf\n",min_dist1);
+					if(min_dist1<bez_min_dist){
+						printf("Unsafe MinDist: %lf\n",min_dist1);
+						vel_adapt=0;
+					}
 					
 
 					// printf("%lf, %lf %lf, %lf, %lf Delta Vel\n",last_delta,vel_adapt,curv*wheelbase,dist_des,t);
