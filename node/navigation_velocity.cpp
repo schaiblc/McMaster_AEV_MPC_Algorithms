@@ -112,8 +112,10 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	//Gradient calculated based on three parts, d part, d_dot due to p_dot for both current and then next point (obj is only nonzero partial x & y)
 	double (*track_line)[nMPC*kMPC] = (double (*)[nMPC*kMPC]) my_func_data; //track_line is now the normal double array
 	double funcreturn=0; //Create objective function as the sum of d and d_dot squared terms (d_dot part assumes constant w)
-	int d_factor=1; //Change weighting of d vs d_dot terms
-	int d_dot_factor=30;
+	double d_factor=1; //Change weighting of d vs d_dot terms
+	double d_dot_factor=30;
+	double delta_factor=1;
+	double vel_factor=1; //Scale importance of higher velocities (racing)
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
@@ -136,10 +138,14 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 				}
 			}
-			funcreturn=funcreturn+pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
-			if(grad){
+			funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
+			if(grad){ //Prioritize lower steering angle magnitudes
 				grad[i]=0; //Gradients wrt theta = 0
-				grad[nMPC*kMPC+i]=2*x[nMPC*kMPC+i];
+				grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
+			}
+			funcreturn=funcreturn+vel_factor/pow(x[4*nMPC*kMPC+i],2); //Prioritize higher velocities
+			if(grad){
+				grad[4*nMPC*kMPC+i]=-vel_factor*2/pow(x[4*nMPC*kMPC+i],3);
 			}
 	}
 	return funcreturn;
@@ -153,11 +159,12 @@ void theta_equality_con(unsigned m, double *result, unsigned n, const double* x,
 		}
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
-		result[i]=x[i+1]-x[i]-opt_params[0]/opt_params[1]*tan(x[nMPC*kMPC+i]);
+		result[i]=x[i+1]-x[i]-opt_params[0]*x[4*nMPC*kMPC+i]/opt_params[1]*tan(x[nMPC*kMPC+i]);
 		if(grad){
 			grad[i*n+i]=-1;
 			grad[i*n+i+1]=1;
-			grad[i*n+nMPC*kMPC+i]=-opt_params[0]/opt_params[1]*pow(1/cos(x[nMPC*kMPC+i]),2);
+			grad[i*n+nMPC*kMPC+i]=-opt_params[0]*x[4*nMPC*kMPC+i]/opt_params[1]*pow(1/cos(x[nMPC*kMPC+i]),2);
+			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]/opt_params[1]*tan(x[nMPC*kMPC+i]);
 		}
 	}
 }
@@ -170,11 +177,12 @@ void x_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 		}
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
-		result[i]=x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-opt_params[0]*cos(x[i]);
+		result[i]=x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*cos(x[i]);
 		if(grad){		
 			grad[i*n+2*nMPC*kMPC+i]=-1;
 			grad[i*n+2*nMPC*kMPC+i+1]=1;
-			grad[i*n+i]=opt_params[0]*sin(x[i]);
+			grad[i*n+i]=opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
+			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*cos(x[i]);
 		}
 	}
 }
@@ -187,11 +195,12 @@ void y_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 		}
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
-		result[i]=x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-opt_params[0]*sin(x[i]);
+		result[i]=x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
 		if(grad){
 			grad[i*n+3*nMPC*kMPC+i]=-1;
 			grad[i*n+3*nMPC*kMPC+i+1]=1;
-			grad[i*n+i]=-opt_params[0]*cos(x[i]);
+			grad[i*n+i]=-opt_params[0]*x[4*nMPC*kMPC+i]*cos(x[i]);
+			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*sin(x[i]);
 		}
 	}
 }
@@ -235,6 +244,14 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 	double initial_vel=xopt[1][0]; //Initial velocity
 	double delta_max=xopt[0][1]; //Max change in delta
 	double accel_max=xopt[1][1]; //Max change in velocity
+	double vel_max=xopt[0][2]; //Max allowed velocity
+	double vel_beta=xopt[1][2]; //Soft min smoothing constant
+	double stop_dist=xopt[0][3]; //Soft min minimum dist
+	double stop_dist_decay=xopt[1][3]; //Soft min decay scale factor
+	double theta_band_smooth=xopt[0][4]; //Smooth factor for allowable braking |theta diff| obstacles
+	double theta_band_diff=xopt[1][4]; //Theta band difference cutoff, for braking
+
+
 	
 
 	if(result){
@@ -249,22 +266,101 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		}
 	}
 
-	//Max change in vel
+	for(int i=0;i<nMPC*kMPC-1;i++){
+		//Max change in vel
+		result[4*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
+		if(grad){
+			grad[4*i*n+(4*nMPC*kMPC+i+1)]=1;
+			grad[4*i*n+(4*nMPC*kMPC+i)]=-1;
+		}
 
-	//-Max change in vel
+		//-Max change in vel
+		result[4*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
+		if(grad){
+			grad[(4*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
+			grad[(4*i+1)*n+(4*nMPC*kMPC+i)]=1;
+		}
 
+		//Steering angle dependency
+		result[4*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+		if(grad){
+			grad[(4*i+2)*n+4*nMPC*kMPC+i]=1;
+			grad[(4*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+		}
+
+		//Obstacle proximity dependency
+		for(int j=0;j<cols-5;j++){
+			double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+			double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+
+			double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+			double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+
+			result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
+			if(grad){
+				double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+				double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+				double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+				double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+				double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+
+				grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+				grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
+				grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+
+			}
+		}
+		double d_min=-1/vel_beta*log(result[4*i+3]);
+		if(grad){
+			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
+			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
+			grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
+			
+		}
+		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+
+	}
+
+	//Add two last constraints for last discretized point (since vel change constraints aren't possible at last discretized point)
+	int i=nMPC*kMPC-1;
 	//Steering angle dependency
+	result[4*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+	if(grad){
+		grad[(4*i)*n+4*nMPC*kMPC+i]=1;
+		grad[(4*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+	}
 
 	//Obstacle proximity dependency
+	for(int j=0;j<cols-5;j++){
+		double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+		double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
 
-	//Also add vel to func as well as gradients
-	//Also in other constraints, now need gradients wrt vel and should be *vel_i and not constant vel in result terms
+		double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+		double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
 
+		result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
+		if(grad){
+			double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+			double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+			double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+			double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+			double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
 
+			grad[(4*i+1)*n+2*nMPC*kMPC+i]=grad[(4*i+1)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+			grad[(4*i+1)*n+3*nMPC*kMPC+i]=grad[(4*i+1)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
+			grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+		}
+	}
+	double d_min=-1/vel_beta*log(result[4*i+1]);
+	if(grad){
+		grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
+		grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
+		grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
+		
+	}
+	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
 
 }
-
-
 
 
 
@@ -371,6 +467,9 @@ class GapBarrier
 		double min_speed=0;
 		double max_speed=0;
 		double max_accel=0; //Max decel is set to equal
+		double vel_beta=0;
+		double theta_band_smooth=0;
+		double theta_band_diff=0;
 
 		//MPC parameters
 		//int nMPC, kMPC;
@@ -417,6 +516,9 @@ class GapBarrier
 
 		double veh_det_length=0;
 		double veh_det_width=0;
+
+		double obs_sep=0;
+		double max_obs=0;
 
 		ros::Time timestamp_tf1; ros::Time timestamp_tf2;
 		ros::Time timestamp_cam1; ros::Time timestamp_cam2;
@@ -546,6 +648,11 @@ class GapBarrier
 			nf.getParam("max_speed",max_speed);
 			nf.getParam("min_speed",min_speed);
 			nf.getParam("max_accel",max_accel); //Max decel set to equal
+			nf.getParam("bez_beta",vel_beta);
+			nf.getParam("theta_band_smooth",theta_band_smooth);
+			nf.getParam("theta_band_diff",theta_band_diff);
+			nf.getParam("obs_sep",obs_sep);
+			nf.getParam("max_obs",max_obs);
 
 
 			vel = 0.0;
@@ -791,7 +898,6 @@ class GapBarrier
 
 				}
 				else if(transform.header.frame_id == "map" && transform.child_frame_id == "base_link"){ //This is for simulation only
-					vel_adapt=velocity_MPC; //In simulation, adaptive velocity is based on our input, not VESC since not connected
 					
 					simx=transform.transform.translation.x;
 					simy=transform.transform.translation.y;
@@ -2763,14 +2869,20 @@ class GapBarrier
 				double tol2[4*nMPC*kMPC-2]={1e-8};
 				
 				
-				double opt_params[4]={vel_adapt*std::max(default_dt,dt),wheelbase,std::abs(max_servo_speed*std::max(default_dt,dt)),last_delta};
+				double opt_params[4]={std::max(default_dt,dt),wheelbase,std::abs(max_servo_speed*std::max(default_dt,dt)),last_delta};
 
 				std::vector<double> opt_params_vel;
 
-				opt_params_vel.push_back(num_obs+2);
+				opt_params_vel.push_back(num_obs+5);
 				opt_params_vel.push_back(vel_adapt);
-				opt_params_vel.push_back(max_delta);
+				opt_params_vel.push_back(max_steering_angle);
 				opt_params_vel.push_back(max_accel);
+				opt_params_vel.push_back(max_speed);
+				opt_params_vel.push_back(vel_beta);
+				opt_params_vel.push_back(stop_distance);
+				opt_params_vel.push_back(stop_distance_decay);
+				opt_params_vel.push_back(theta_band_smooth);
+				opt_params_vel.push_back(theta_band_diff);
 
 				for (int i=0; i<num_obs;i++){ //Add all subsampled obstacles to the parameters
 					opt_params_vel.push_back(sub_bez_obs[i][0]);
@@ -2788,6 +2900,10 @@ class GapBarrier
 				nlopt_set_maxtime(opt, 0.05);
 
 				double x[5*nMPC*kMPC];  /* `*`some` `initial` `guess`*` */
+				x_vehicle[0]=0;
+				y_vehicle[0]=0;
+				thetas[0]=0;
+				vel_vehicle[0]=vel_adapt;
 
 				//Try new attempt at initial guess
 				for (int j=0;j<nMPC;j++){
@@ -2822,13 +2938,14 @@ class GapBarrier
 						}
 					}
 				}
+				
 				for(int i=1;i<nMPC*kMPC;i++){
 					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*cos(thetas[i-1]);
 					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*sin(thetas[i-1]);
 					vel_vehicle[i]=vel_adapt;
 				}
 
-				for (int i=0;i<nMPC*kMPC;i++){ //STarting guess 
+				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess 
 					x[i]=thetas[i];
 					x[i+nMPC*kMPC]=deltas[i];
 					x[i+2*nMPC*kMPC]=x_vehicle[i];
@@ -2842,14 +2959,15 @@ class GapBarrier
 
 				if(isnan(minf)){
 					forcestop=1;
+					printf("Nan error\n");
 				}
 				else{
 					forcestop=0;
 				}
 
 				if (optim < 0) {
-					ROS_INFO("Optimization Error");
-
+					ROS_INFO("Optimization Error %d",optim);
+					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
 				}
 				else {
 					successful_opt=1;
@@ -2862,6 +2980,8 @@ class GapBarrier
 					}
 					
 					last_delta=deltas[1];
+					vel_adapt=vel_vehicle[1];
+					printf("%lf, %lf\n",vel_adapt,last_delta);
 				}
 				if(minf<5 && startcheck==0){
 					startcheck=1;
@@ -3062,7 +3182,8 @@ class GapBarrier
 
 				velocity_MPC = velocity_scale*vehicle_velocity; //Implement slowing if we near an obstacle
 
-
+				vel_adapt=std::max(std::min(vel_adapt,max_speed),min_speed);
+				
 			}
 
 			ackermann_msgs::AckermannDriveStamped drive_msg; 
@@ -3071,7 +3192,7 @@ class GapBarrier
 			if(startcheck==1){
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
-					drive_msg.drive.speed = velocity_MPC; //velocity_MPC
+					drive_msg.drive.speed = vel_adapt; //velocity_MPC
 				}
 				else{
 					drive_msg.drive.speed = 0;
