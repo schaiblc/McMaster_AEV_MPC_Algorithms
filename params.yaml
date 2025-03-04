@@ -9,7 +9,7 @@ buffer_length: 5
 
 # Limits on the speed and steering angle
 max_speed: 2.0 #  meters/second
-min_speed: 1.7 # Otherwise, vehicle stops
+min_speed: 0 # Otherwise, vehicle stops
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
@@ -227,7 +227,7 @@ stop_time2: 1.0
 # Speed control paramteres
 heading_beam_angle: rad(pi/16)
 stop_distance: 0.4 #m
-stop_distance_decay: 1.5 #m
+stop_distance_decay: 0.5 #m
 
 #MPC Parameters
 nMPC: 3
@@ -242,6 +242,9 @@ veh_det_length: 0.5
 veh_det_width: 0.4
 
 use_neural_net: 0
+
+theta_band_smooth: 200
+theta_band_diff: rad(pi/16)
 
 #Bezier MPC Parameters
 bez_ctrl_pts: 5
