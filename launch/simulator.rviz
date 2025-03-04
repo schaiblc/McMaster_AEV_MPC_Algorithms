@@ -214,6 +214,22 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
+      Marker Topic: /navigation_velocity/wall_markers
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_velocity/mpc_markers
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
       Marker Topic: /navigation_bezier/vehicle_detect
       Name: Marker
       Namespaces:
