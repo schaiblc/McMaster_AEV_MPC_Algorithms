@@ -60,6 +60,7 @@
 //C++ will auto typedef float3 data type
 int nMPC=0; //Defined outside class to be used in predefined functions for nlopt MPC calculation
 int kMPC=0;
+int nanflag=0;
 
 
 struct float3
@@ -114,8 +115,8 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double funcreturn=0; //Create objective function as the sum of d and d_dot squared terms (d_dot part assumes constant w)
 	double d_factor=1; //Change weighting of d vs d_dot terms
 	double d_dot_factor=30;
-	double delta_factor=1;
-	double vel_factor=1; //Scale importance of higher velocities (racing)
+	double delta_factor=0.1;
+	double vel_factor=0.1; //Scale importance of higher velocities (racing)
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
@@ -123,6 +124,10 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	}
 	for (int i=0;i<nMPC*kMPC;i++){
 			funcreturn=funcreturn+d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+			if(nanflag==0 && isnan(d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2))))){
+				printf("NAN1 %lf, %lf, %d\n",x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],i);
+				nanflag=1;
+			}
 			if(grad){
 				grad[2*nMPC*kMPC+i]=d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
 				grad[3*nMPC*kMPC+i]=d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
@@ -133,21 +138,43 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			}
 			if(i<nMPC*kMPC-1){
 				funcreturn=funcreturn+d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+				if(nanflag==0 && isnan(d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)))){
+					printf("NAN2\n");
+					nanflag=1;
+				}
 				if(grad){
 					grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 				}
 			}
 			funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
+			if(nanflag==0 && isnan(delta_factor*pow(x[nMPC*kMPC+i],2))){
+				printf("NAN3\n");
+				nanflag=1;
+			}
 			if(grad){ //Prioritize lower steering angle magnitudes
 				grad[i]=0; //Gradients wrt theta = 0
 				grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
 			}
 			funcreturn=funcreturn+vel_factor/pow(x[4*nMPC*kMPC+i],2); //Prioritize higher velocities
+			if(nanflag==0 && isnan(vel_factor/pow(x[4*nMPC*kMPC+i],2))){
+				printf("NAN4\n");
+				nanflag=1;
+			}
 			if(grad){
 				grad[4*nMPC*kMPC+i]=-vel_factor*2/pow(x[4*nMPC*kMPC+i],3);
 			}
 	}
+	// printf("%lf\n",funcreturn);
+	if(grad){
+		for(int i=0; i<n;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN FUNC%d\n",i);
+				nanflag=1;
+			}
+		}
+	}
+	
 	return funcreturn;
 }
 
@@ -160,6 +187,10 @@ void theta_equality_con(unsigned m, double *result, unsigned n, const double* x,
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[i+1]-x[i]-opt_params[0]*x[4*nMPC*kMPC+i]/opt_params[1]*tan(x[nMPC*kMPC+i]);
+		if(isnan(result[i] &&nanflag==0)){
+			printf("THETANAN\n");
+			nanflag=1;
+		}
 		if(grad){
 			grad[i*n+i]=-1;
 			grad[i*n+i+1]=1;
@@ -167,6 +198,15 @@ void theta_equality_con(unsigned m, double *result, unsigned n, const double* x,
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]/opt_params[1]*tan(x[nMPC*kMPC+i]);
 		}
 	}
+	if(grad){
+		for(int i=0; i<n*m;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN THETA%d\n",i);
+				nanflag=1;
+			}
+		}
+	}
+
 }
 
 void x_equality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* f_data){ //X kinematics equality
@@ -178,11 +218,23 @@ void x_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*cos(x[i]);
+		if(isnan(result[i]) && nanflag==0){
+			printf("XNAN\n");
+			nanflag=1;
+		}
 		if(grad){		
 			grad[i*n+2*nMPC*kMPC+i]=-1;
 			grad[i*n+2*nMPC*kMPC+i+1]=1;
 			grad[i*n+i]=opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*cos(x[i]);
+		}
+	}
+	if(grad){
+		for(int i=0; i<n*m;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN X%d\n",i);
+				nanflag=1;
+			}
 		}
 	}
 }
@@ -196,11 +248,23 @@ void y_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
+		if(isnan(result[i])&&nanflag==0){
+			printf("YNAN\n");
+			nanflag=1;
+		}
 		if(grad){
 			grad[i*n+3*nMPC*kMPC+i]=-1;
 			grad[i*n+3*nMPC*kMPC+i+1]=1;
 			grad[i*n+i]=-opt_params[0]*x[4*nMPC*kMPC+i]*cos(x[i]);
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*sin(x[i]);
+		}
+	}
+	if(grad){
+		for(int i=0; i<n*m;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN Y%d\n",i);
+				nanflag=1;
+			}
 		}
 	}
 }
@@ -215,6 +279,10 @@ void delta_inequality_con(unsigned m, double *result, unsigned n, const double* 
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[2*i]=x[nMPC*kMPC+i+1]-x[nMPC*kMPC+i]-opt_params[2];
 		result[2*i+1]=-x[nMPC*kMPC+i+1]+x[nMPC*kMPC+i]-opt_params[2];
+		if(isnan(result[2*i+1])&&nanflag==0){
+			printf("DELTANAN\n");
+			nanflag=1;
+		}
 		if(grad){
 			grad[2*i*n+nMPC*kMPC+i]=-1;
 			grad[2*i*n+nMPC*kMPC+i+1]=1;
@@ -229,12 +297,20 @@ void delta_inequality_con(unsigned m, double *result, unsigned n, const double* 
 		grad[(2*nMPC*kMPC-1)*n+nMPC*kMPC]=1;
 		grad[(2*nMPC*kMPC)*n+nMPC*kMPC]=-1;
 	}
+	if(grad){
+		for(int i=0; i<n*m;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN DELTA%d\n",i);
+				nanflag=1;
+			}
+		}
+	}
 
 }
 
 void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* my_func_data){ //velocity kinematics inequality
 	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
-	int cols = static_cast<int>(raw_data[0]); 
+	int cols = static_cast<int>(raw_data[0]);
 	double xopt[2][cols]; //2D array of obstacle locations appended to some certain variables
 	for (int i = 0; i < cols; i++) {
         xopt[0][i] = raw_data[2*i];
@@ -251,9 +327,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 	double theta_band_smooth=xopt[0][4]; //Smooth factor for allowable braking |theta diff| obstacles
 	double theta_band_diff=xopt[1][4]; //Theta band difference cutoff, for braking
 
-
-	
-
 	if(result){
 		for(int i=0;i<m;i++){
 			result[i]=0;
@@ -268,97 +341,153 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 	for(int i=0;i<nMPC*kMPC-1;i++){
 		//Max change in vel
-		result[4*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
+		result[3*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
+		if(isnan(result[3*i])&&nanflag==0){
+			printf("VELNAN1\n");
+			nanflag=1;
+		}
 		if(grad){
-			grad[4*i*n+(4*nMPC*kMPC+i+1)]=1;
-			grad[4*i*n+(4*nMPC*kMPC+i)]=-1;
+			grad[3*i*n+(4*nMPC*kMPC+i+1)]=1;
+			grad[3*i*n+(4*nMPC*kMPC+i)]=-1;
 		}
 
 		//-Max change in vel
-		result[4*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
+		result[3*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
+		if(isnan(result[3*i+1])&&nanflag==0){
+			printf("VELNAN2\n");
+			nanflag=1;
+		}
 		if(grad){
-			grad[(4*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
-			grad[(4*i+1)*n+(4*nMPC*kMPC+i)]=1;
+			grad[(3*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
+			grad[(3*i+1)*n+(4*nMPC*kMPC+i)]=1;
 		}
 
 		//Steering angle dependency
-		result[4*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+		result[3*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+		if(isnan(result[4*i+2])&&nanflag==0){
+			printf("VELNAN3\n");
+			nanflag=1;
+		}
 		if(grad){
-			grad[(4*i+2)*n+4*nMPC*kMPC+i]=1;
-			grad[(4*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+			grad[(3*i+2)*n+4*nMPC*kMPC+i]=1;
+			grad[(3*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 		}
 
 		//Obstacle proximity dependency
-		for(int j=0;j<cols-5;j++){
-			double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
-			double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+		// for(int j=0;j<cols-5;j++){
+		// 	double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+		// 	double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
 
-			double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
-			double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+		// 	double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+		// 	double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+		// 	result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
+		// 	if(isnan(result[4*i+3])&&nanflag==0){
+		// 		printf("VELNAN4\n");
+		// 		nanflag=1;
+		// 	}
+		// 	if(grad){
+		// 		double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+		// 		double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+		// 		double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+		// 		double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+		// 		double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+		// 		if(isnan(dtheta_band)&&nanflag==0){
+		// 			printf("THET %lf, %lf\n",(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),(exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
+		// 			printf("%lf, %lf, %lf\n",theta_diff,theta_band_smooth,theta_band_diff);
+		// 			printf("%lf, %lf, %lf, %lf\n",exp(-theta_band_smooth*(theta_diff+theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),exp(-theta_band_smooth*(theta_diff-theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
 
-			result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
-			if(grad){
-				double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
-				double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
-				double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
-				double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-				double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-
-				grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
-				grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
-				grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
-
-			}
-		}
-		double d_min=-1/vel_beta*log(result[4*i+3]);
-		if(grad){
-			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
-			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
-			grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
+		// 		}
+		// 		grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+		// 		grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
 			
-		}
-		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+		// 		if(isnan(grad[(4*i+3)*n+i])&&nanflag==0){
+		// 			printf("%lf\n",grad[(4*i+3)*n+i]);
+		// 			nanflag=1;
+		// 		}
+				
+		// 		grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+				
+		// 		if(nanflag==0&&isnan(grad[(4*i+3)*n+i])){
+		// 			printf("%lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
+		// 			nanflag=1;
+		// 		}
+			
+		// 	}
+		// }
+		// double d_min=-1/vel_beta*log(result[4*i+3]);
+		// // printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
+		// if(grad){
+		// 	grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
+		// 	grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
+		// 	grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
+			
+		// }
+		// result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+		// if(isnan(result[4*i+3])&&nanflag==0){
+		// 	printf("VELNAN4a\n");
+		// 	nanflag=1;
+		// }
 
 	}
 
 	//Add two last constraints for last discretized point (since vel change constraints aren't possible at last discretized point)
 	int i=nMPC*kMPC-1;
 	//Steering angle dependency
-	result[4*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+	result[3*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+	if(isnan(result[3*i])&&nanflag==0){
+		printf("VELNAN4b\n");
+		nanflag=1;
+	}
 	if(grad){
-		grad[(4*i)*n+4*nMPC*kMPC+i]=1;
-		grad[(4*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+		grad[(3*i)*n+4*nMPC*kMPC+i]=1;
+		grad[(3*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 	}
 
-	//Obstacle proximity dependency
-	for(int j=0;j<cols-5;j++){
-		double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
-		double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+	// //Obstacle proximity dependency
+	// for(int j=0;j<cols-5;j++){
+	// 	double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+	// 	double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
 
-		double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
-		double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+	// 	double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+	// 	double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
 
-		result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
-		if(grad){
-			double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
-			double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
-			double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
-			double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-			double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+	// 	result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
+	// 	if(isnan(result[4*i+1])&&nanflag==0){
+	// 		printf("VELNAN4c\n");
+	// 		nanflag=1;
+	// 	}
+	// 	if(grad){
+	// 		double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+	// 		double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+	// 		double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+	// 		double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+	// 		double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
 
-			grad[(4*i+1)*n+2*nMPC*kMPC+i]=grad[(4*i+1)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
-			grad[(4*i+1)*n+3*nMPC*kMPC+i]=grad[(4*i+1)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
-			grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
-		}
-	}
-	double d_min=-1/vel_beta*log(result[4*i+1]);
-	if(grad){
-		grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
-		grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
-		grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
+	// 		grad[(4*i+1)*n+2*nMPC*kMPC+i]=grad[(4*i+1)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+	// 		grad[(4*i+1)*n+3*nMPC*kMPC+i]=grad[(4*i+1)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
+	// 		grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+	// 	}
+	// }
+	// double d_min=-1/vel_beta*log(result[4*i+1]);
+	// if(grad){
+	// 	grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
+	// 	grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
+	// 	grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
 		
-	}
-	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+	// }
+	// result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+	// if(isnan(result[4*i+1])&&nanflag==0){
+	// 	printf("VELNAN4d\n");
+	// 	nanflag=1;
+	// }
+	// if(grad){
+	// 	for(int i=0; i<n*m;i++){
+	// 		if(isnan(grad[i])&&nanflag==0){
+	// 			printf("NAN VEL%d\n",i);
+	// 			nanflag=1;
+	// 		}
+	// 	}
+	// }
 
 }
 
@@ -487,7 +616,7 @@ class GapBarrier
 		double speed_to_erpm_gain, speed_to_erpm_offset;
 		double steering_angle_to_servo_gain, steering_angle_to_servo_offset;
 		std_msgs::Float64 last_servo_state;
-		double vel_adapt=0.1;
+		double vel_adapt=1;
 
 		double testx, testy, testtheta;
 
@@ -2308,13 +2437,14 @@ class GapBarrier
 				// printf("Seems that once measurements get missed, can run into cases of states exploding\n");
 
 				// printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-				if(car_detects[q].state[3]>0.3){
-					std::cout << "State:\n" << car_detects[q].state << std::endl;
-					std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-					std::cout << "Pred State:\n" << pred_state << std::endl;
-					std::cout << "Measure:\n" << meas_vec << std::endl;
-					printf("%d\n",car_detects[q].miss_fr);
-				}
+				
+				// if(car_detects[q].state[3]>0.3){
+				// 	std::cout << "State:\n" << car_detects[q].state << std::endl;
+				// 	std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
+				// 	std::cout << "Pred State:\n" << pred_state << std::endl;
+				// 	std::cout << "Measure:\n" << meas_vec << std::endl;
+				// 	printf("%d\n",car_detects[q].miss_fr);
+				// }
 
 
 
@@ -2830,7 +2960,7 @@ class GapBarrier
 				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
 				// fprintf(file1,"*******************\n");
 				// fclose(file1);
-
+				printf("%NumObs: %d\n",num_obs);
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
@@ -2876,7 +3006,7 @@ class GapBarrier
 				opt_params_vel.push_back(num_obs+5);
 				opt_params_vel.push_back(vel_adapt);
 				opt_params_vel.push_back(max_steering_angle);
-				opt_params_vel.push_back(max_accel);
+				opt_params_vel.push_back(max_accel*std::max(default_dt,dt));
 				opt_params_vel.push_back(max_speed);
 				opt_params_vel.push_back(vel_beta);
 				opt_params_vel.push_back(stop_distance);
@@ -2893,9 +3023,8 @@ class GapBarrier
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, x_equality_con, &opt_params, tol);
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol);
 				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC+1, delta_inequality_con, &opt_params, tol1);
-				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, &opt_params_vel, tol2);
+				nlopt_add_inequality_mconstraint(opt, 3*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
 
-			
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
 
@@ -2934,28 +3063,32 @@ class GapBarrier
 							}
 						}
 						if(i!=kMPC-1||j!=nMPC-1){
-							thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]/opt_params[1]*tan(deltas[i+j*kMPC]);
+							thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]*(max_speed/2)/opt_params[1]*tan(deltas[i+j*kMPC]);
 						}
 					}
 				}
 				
 				for(int i=1;i<nMPC*kMPC;i++){
-					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*cos(thetas[i-1]);
-					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*sin(thetas[i-1]);
-					vel_vehicle[i]=vel_adapt;
+					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
+					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
+					vel_vehicle[i]=max_speed/2;
 				}
 
-				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess 
+				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
 					x[i]=thetas[i];
 					x[i+nMPC*kMPC]=deltas[i];
 					x[i+2*nMPC*kMPC]=x_vehicle[i];
 					x[i+3*nMPC*kMPC]=y_vehicle[i];
 					x[i+4*nMPC*kMPC]=vel_vehicle[i];
+					// printf("Guess %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 				}
 				int successful_opt=0;
 
 				double minf; /* `*`the` `minimum` `objective` `value,` `upon` `return`*` */
+				double opttime1=ros::Time::now().toSec();
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
+				double opttime2=ros::Time::now().toSec();
+				printf("OptTime: %lf, Evals: %d\n",opttime2-opttime1,nlopt_get_numevals(opt));
 
 				if(isnan(minf)){
 					forcestop=1;
@@ -2971,21 +3104,30 @@ class GapBarrier
 				}
 				else {
 					successful_opt=1;
+					printf("Successful Opt: %d\n",optim);
 					for (int i=0;i<nMPC*kMPC;i++){
 						thetas[i]=x[i];
 						deltas[i]=x[i+nMPC*kMPC];
 						x_vehicle[i]=x[i+2*nMPC*kMPC];
 						y_vehicle[i]=x[i+3*nMPC*kMPC];
 						vel_vehicle[i]=x[i+4*nMPC*kMPC];
+						// printf("Result %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 					}
 					
 					last_delta=deltas[1];
 					vel_adapt=vel_vehicle[1];
 					printf("%lf, %lf\n",vel_adapt,last_delta);
+					// printf("********************\n");
+					// for(int i=0;i<nMPC*kMPC;i++){
+					// 	printf("%d, %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
+
+					// }
+					// printf("********************\n");
 				}
 				if(minf<5 && startcheck==0){
 					startcheck=1;
 				}
+				startcheck=1;
 
 				nlopt_destroy(opt);
 
@@ -3183,7 +3325,6 @@ class GapBarrier
 				velocity_MPC = velocity_scale*vehicle_velocity; //Implement slowing if we near an obstacle
 
 				vel_adapt=std::max(std::min(vel_adapt,max_speed),min_speed);
-				
 			}
 
 			ackermann_msgs::AckermannDriveStamped drive_msg; 
