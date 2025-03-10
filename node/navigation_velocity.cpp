@@ -341,153 +341,161 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 	for(int i=0;i<nMPC*kMPC-1;i++){
 		//Max change in vel
-		result[3*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
-		if(isnan(result[3*i])&&nanflag==0){
+		result[4*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
+		if(isnan(result[4*i])&&nanflag==0){
 			printf("VELNAN1\n");
 			nanflag=1;
 		}
 		if(grad){
-			grad[3*i*n+(4*nMPC*kMPC+i+1)]=1;
-			grad[3*i*n+(4*nMPC*kMPC+i)]=-1;
+			grad[4*i*n+(4*nMPC*kMPC+i+1)]=1;
+			grad[4*i*n+(4*nMPC*kMPC+i)]=-1;
 		}
 
 		//-Max change in vel
-		result[3*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
-		if(isnan(result[3*i+1])&&nanflag==0){
+		result[4*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
+		if(isnan(result[4*i+1])&&nanflag==0){
 			printf("VELNAN2\n");
 			nanflag=1;
 		}
 		if(grad){
-			grad[(3*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
-			grad[(3*i+1)*n+(4*nMPC*kMPC+i)]=1;
+			grad[(4*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
+			grad[(4*i+1)*n+(4*nMPC*kMPC+i)]=1;
 		}
 
 		//Steering angle dependency
-		result[3*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+		result[4*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
 		if(isnan(result[4*i+2])&&nanflag==0){
 			printf("VELNAN3\n");
 			nanflag=1;
 		}
 		if(grad){
-			grad[(3*i+2)*n+4*nMPC*kMPC+i]=1;
-			grad[(3*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+			grad[(4*i+2)*n+4*nMPC*kMPC+i]=1;
+			grad[(4*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 		}
-
+		// printf("*************\n");
 		//Obstacle proximity dependency
-		// for(int j=0;j<cols-5;j++){
-		// 	double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
-		// 	double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+		for(int j=0;j<cols-5;j++){
+			double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+			double theta1=atan2(-x[3*nMPC*kMPC+i]+xopt[1][j+5],-x[2*nMPC*kMPC+i]+xopt[0][j+5]);
+			double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+			
+			// if(std::abs(theta_diff)<std::abs(theta_band_diff)){	
+			// 	printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf, %d\n",dist1, theta_diff, x[2*nMPC*kMPC+i], x[3*nMPC*kMPC+i], x[i], xopt[0][j+5], xopt[1][j+5], i);
+			// }
+			double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+			
+			result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
+			if(isnan(result[4*i+3])&&nanflag==0){
+				printf("VELNAN4\n");
+				nanflag=1;
+			}
+			if(grad){
+				double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+				double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+				double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+				double dthetadiffx=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+				double dthetadiffy=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+				if(isnan(dtheta_band)&&nanflag==0){
+					printf("THET %lf, %lf\n",(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),(exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
+					printf("%lf, %lf, %lf\n",theta_diff,theta_band_smooth,theta_band_diff);
+					printf("%lf, %lf, %lf, %lf\n",exp(-theta_band_smooth*(theta_diff+theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),exp(-theta_band_smooth*(theta_diff-theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
 
-		// 	double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
-		// 	double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
-		// 	result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
-		// 	if(isnan(result[4*i+3])&&nanflag==0){
-		// 		printf("VELNAN4\n");
-		// 		nanflag=1;
-		// 	}
-		// 	if(grad){
-		// 		double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
-		// 		double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
-		// 		double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
-		// 		double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-		// 		double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-		// 		if(isnan(dtheta_band)&&nanflag==0){
-		// 			printf("THET %lf, %lf\n",(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),(exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
-		// 			printf("%lf, %lf, %lf\n",theta_diff,theta_band_smooth,theta_band_diff);
-		// 			printf("%lf, %lf, %lf, %lf\n",exp(-theta_band_smooth*(theta_diff+theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),exp(-theta_band_smooth*(theta_diff-theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
-
-		// 		}
-		// 		grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
-		// 		grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
+				}
+				grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+				grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
 			
-		// 		if(isnan(grad[(4*i+3)*n+i])&&nanflag==0){
-		// 			printf("%lf\n",grad[(4*i+3)*n+i]);
-		// 			nanflag=1;
-		// 		}
+				if(isnan(grad[(4*i+3)*n+i])&&nanflag==0){
+					printf("%lf\n",grad[(4*i+3)*n+i]);
+					nanflag=1;
+				}
 				
-		// 		grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+				grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
 				
-		// 		if(nanflag==0&&isnan(grad[(4*i+3)*n+i])){
-		// 			printf("%lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
-		// 			nanflag=1;
-		// 		}
+				if(nanflag==0&&isnan(grad[(4*i+3)*n+i])){
+					printf("%lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
+					nanflag=1;
+				}
 			
-		// 	}
+			}
+		}
+		double d_min=-1/vel_beta*log(result[4*i+3]);
+		// if(i==0){
+		// 	printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
 		// }
-		// double d_min=-1/vel_beta*log(result[4*i+3]);
-		// // printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
-		// if(grad){
-		// 	grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
-		// 	grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
-		// 	grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
+		if(grad){
+			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
+			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
+			grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
 			
-		// }
-		// result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
-		// if(isnan(result[4*i+3])&&nanflag==0){
-		// 	printf("VELNAN4a\n");
-		// 	nanflag=1;
-		// }
+		}
+		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+		
+		if(isnan(result[4*i+3])&&nanflag==0){
+			printf("VELNAN4a\n");
+			nanflag=1;
+		}
 
 	}
 
 	//Add two last constraints for last discretized point (since vel change constraints aren't possible at last discretized point)
 	int i=nMPC*kMPC-1;
 	//Steering angle dependency
-	result[3*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
-	if(isnan(result[3*i])&&nanflag==0){
+	result[4*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
+	if(isnan(result[4*i])&&nanflag==0){
 		printf("VELNAN4b\n");
 		nanflag=1;
 	}
 	if(grad){
-		grad[(3*i)*n+4*nMPC*kMPC+i]=1;
-		grad[(3*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
+		grad[(4*i)*n+4*nMPC*kMPC+i]=1;
+		grad[(4*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 	}
-
 	// //Obstacle proximity dependency
-	// for(int j=0;j<cols-5;j++){
-	// 	double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
-	// 	double theta1=atan2(x[3*nMPC*kMPC+i]-xopt[1][j+5],x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+	for(int j=0;j<cols-5;j++){
+		double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
+		double theta1=atan2(-x[3*nMPC*kMPC+i]+xopt[1][j+5],-x[2*nMPC*kMPC+i]+xopt[0][j+5]);
 
-	// 	double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
-	// 	double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
+		double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
+		double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
 
-	// 	result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
-	// 	if(isnan(result[4*i+1])&&nanflag==0){
-	// 		printf("VELNAN4c\n");
-	// 		nanflag=1;
-	// 	}
-	// 	if(grad){
-	// 		double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
-	// 		double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
-	// 		double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
-	// 		double dthetadiffx=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-	// 		double dthetadiffy=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+		result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
 
-	// 		grad[(4*i+1)*n+2*nMPC*kMPC+i]=grad[(4*i+1)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
-	// 		grad[(4*i+1)*n+3*nMPC*kMPC+i]=grad[(4*i+1)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
-	// 		grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
-	// 	}
-	// }
-	// double d_min=-1/vel_beta*log(result[4*i+1]);
-	// if(grad){
-	// 	grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
-	// 	grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
-	// 	grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
+		if(isnan(result[4*i+1])&&nanflag==0){
+			printf("VELNAN4c\n");
+			nanflag=1;
+		}
+		if(grad){
+			double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
+			double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
+			double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
+			double dthetadiffx=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+			double dthetadiffy=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
+
+			grad[(4*i+1)*n+2*nMPC*kMPC+i]=grad[(4*i+1)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
+			grad[(4*i+1)*n+3*nMPC*kMPC+i]=grad[(4*i+1)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
+			grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
+		}
+	}
+	double d_min=-1/vel_beta*log(result[4*i+1]);
+	if(grad){
+		grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
+		grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
+		grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
 		
-	// }
-	// result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
-	// if(isnan(result[4*i+1])&&nanflag==0){
-	// 	printf("VELNAN4d\n");
-	// 	nanflag=1;
-	// }
-	// if(grad){
-	// 	for(int i=0; i<n*m;i++){
-	// 		if(isnan(grad[i])&&nanflag==0){
-	// 			printf("NAN VEL%d\n",i);
-	// 			nanflag=1;
-	// 		}
-	// 	}
-	// }
+	}
+	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+	
+	if(isnan(result[4*i+1])&&nanflag==0){
+		printf("VELNAN4d\n");
+		nanflag=1;
+	}
+	if(grad){
+		for(int i=0; i<n*m;i++){
+			if(isnan(grad[i])&&nanflag==0){
+				printf("NAN VEL%d\n",i);
+				nanflag=1;
+			}
+		}
+	}
 
 }
 
@@ -536,6 +544,8 @@ class GapBarrier
 		ros::Publisher wall_marker_pub;
 		ros::Publisher lobs;
 		ros::Publisher robs;
+		ros::Publisher lobs1;
+		ros::Publisher robs1;
 		ros::Publisher vehicle_detect;
 		ros::Publisher driver_pub;
 		ros::Publisher cv_ranges_pub;
@@ -563,6 +573,7 @@ class GapBarrier
 		std::string drive_state; 
 		double angle_bl, angle_al, angle_br, angle_ar;
 		int n_pts_l, n_pts_r; double max_lidar_range_opt;
+		double adapt_max_range;
 
 		//walls
 		double tau;
@@ -576,6 +587,8 @@ class GapBarrier
 		visualization_msgs::Marker wall_marker;
 		visualization_msgs::Marker lobs_marker;
 		visualization_msgs::Marker robs_marker;
+		visualization_msgs::Marker lobs_marker1;
+		visualization_msgs::Marker robs_marker1;
 		visualization_msgs::Marker vehicle_detect_path;
 
 		//steering & stop time
@@ -617,6 +630,7 @@ class GapBarrier
 		double steering_angle_to_servo_gain, steering_angle_to_servo_offset;
 		std_msgs::Float64 last_servo_state;
 		double vel_adapt=1;
+		double stopped=0;
 
 		double testx, testy, testtheta;
 
@@ -753,6 +767,7 @@ class GapBarrier
 			nf.getParam("n_pts_r", n_pts_r);
 			nf.getParam("max_lidar_range_opt", max_lidar_range_opt);
 			nf.getParam("heading_beam_angle", heading_beam_angle);
+			adapt_max_range=max_lidar_range_opt;
 
 			//walls
 			nf.getParam("tau", tau); 
@@ -880,6 +895,8 @@ class GapBarrier
 			wall_marker_pub=nf.advertise<visualization_msgs::Marker>("walls",2);
 			lobs=nf.advertise<visualization_msgs::Marker>("lobs",2);
 			robs=nf.advertise<visualization_msgs::Marker>("robs",2);
+			lobs1=nf.advertise<visualization_msgs::Marker>("lobs1",2);
+			robs1=nf.advertise<visualization_msgs::Marker>("robs1",2);
 			vehicle_detect=nf.advertise<visualization_msgs::Marker>("vehicle_detect",2);
 			driver_pub = nf.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
 
@@ -1841,18 +1858,18 @@ class GapBarrier
 		}
 
 
-		std::vector<float> preprocess_lidar_MPC(std::vector<float> ranges, std::vector<double> lidar_angles){
+		std::vector<float> preprocess_lidar_MPC(std::vector<float> ranges, std::vector<double> lidar_angles, int num_MPC){
 			left_ind_MPC = 0; right_ind_MPC = 0;
 			//sets distance to zero for obstacles in safe distance, and max_lidar_range for those that are far.
 			int num_det=0;
-			double safe_dist=safe_distance;
+			double safe_dist=max_lidar_range_opt;
 			std::vector<float> ranges1=ranges;
-			while(num_det==0){
+			while(num_det<int(scan_beams/10)){
 				num_det=0;
 				left_ind_MPC = 0; right_ind_MPC = 0;
 				ranges=ranges1;
 				if(safe_dist<0.1){
-					num_det=1;
+					num_det=scan_beams;
 					for(int i =0; i < ranges.size(); ++i){
 						if(lidar_angles[i] <= right_beam_angle_MPC) right_ind_MPC +=1;
 						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
@@ -1865,14 +1882,42 @@ class GapBarrier
 						if(lidar_angles[i] <= left_beam_angle_MPC) left_ind_MPC +=1;
 						if(right_ind_MPC!=i+1 && left_ind_MPC==i+1){
 							if(ranges[i] <= safe_dist) {ranges[i] = 0;}
-							else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; num_det++;}
+							else if(ranges[i] > max_lidar_range) {ranges[i] = max_lidar_range; if(ranges[i]<100) {num_det++;}}
 							else{num_det++;}
 						}
 						
 					}
 				}
-				safe_dist=safe_dist/2;
+				safe_dist=safe_dist*0.9;
+				
 			}
+			// if(num_MPC==0){
+			// 	if(left_ind_MPC>right_ind_MPC+25){ //Decrease safe distance threshold if objects ahead are close, make shorter horizon predictions
+			// 		double mindist=10000;
+			// 		double start_ind=double(right_ind_MPC)+2.0/5.0*double(left_ind_MPC-right_ind_MPC);
+			// 		double end_ind=double(right_ind_MPC)+3.0/5.0*double(left_ind_MPC-right_ind_MPC);
+			// 		for(int j=int(start_ind);j<int(end_ind);j++){
+			// 			if(ranges1[j]<mindist){
+			// 				mindist=ranges1[j];
+			// 			}
+			// 		}
+			// 		adapt_max_range=std::max(0.1,std::min(2*mindist,safe_dist));
+			// 		if(1.5*mindist>safe_dist){
+			// 			printf("SAFEDIST\n");
+			// 		}
+			// 		else{
+			// 			printf("PROX\n");
+			// 		}
+			// 	}
+			// 	else{
+			// 		adapt_max_range=std::max(0.1,safe_dist);
+			// 	}
+				
+			// }
+			if(num_MPC==0){	
+				adapt_max_range=std::max(0.1,safe_dist);
+			}
+			adapt_max_range=max_lidar_range_opt; //Adaptive max range causes issues, keep as a constant parameter which should be tuned to environment
 			left_ind_MPC -=1;
 			return ranges;
 			
@@ -2457,7 +2502,7 @@ class GapBarrier
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
 			// printf("**********************\n\n");
 
-			if (!nav_active ||(use_map && !map_saved)) { //Don't start navigation until map is saved if that's what we're using
+			if (!nav_active ||(use_map && !map_saved)||stopped) { //Don't start navigation until map is saved if that's what we're using
 				drive_state = "normal";
 				return;
 			}
@@ -2499,13 +2544,14 @@ class GapBarrier
 
 			int sec_len = int(heading_beam_angle/data->angle_increment);
 
-			double min_distance, velocity_scale, delta_d;
+			double min_distance, velocity_scale, delta_d=0;
 			
 
 			if(drive_state == "normal"){
 				std::vector<float> fused_ranges_MPC=fused_ranges;
 				std::vector<float> fused_ranges_MPC_tot0;
 				std::vector<double> lidar_transform_angles_tot0;
+				double savex=0, savey=0, savetheta=0;
 
 
 				double track_line[2][nMPC*kMPC]; //Tracking line a & b (assume c=1) parameters for all time intervals, additional terms for passing n & k
@@ -2516,7 +2562,11 @@ class GapBarrier
 
 				std::vector<std::vector<double>> obstacle_points_l;
 				std::vector<std::vector<double>> obstacle_points_r;
-				double heading_angle;
+				std::vector<std::vector<double>> obstacle_points_l0;
+				std::vector<std::vector<double>> obstacle_points_r0;
+				std::vector<std::vector<double>> obstacle_points_l1;
+				std::vector<std::vector<double>> obstacle_points_r1;
+				double heading_angle=0;
 
 				std::vector<double> lidar_transform_angles;
 				for(int i=0;i<data->ranges.size();i++){
@@ -2660,7 +2710,8 @@ class GapBarrier
 						lidar_transform_angles_tot0=lidar_transform_angles_tot;
 					}
 
-					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot);
+					
+					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot,num_MPC);
 					
 					int str_indx_MPC, end_indx_MPC; double heading_angle_MPC;
 					heading_angle_MPC=find_missing_scan_gap_MPC(lidar_transform_angles_tot);
@@ -2736,7 +2787,7 @@ class GapBarrier
 							double obs_range = static_cast<double>(fused_ranges_MPC_tot[obs_index]);
 							
 
-							if(obs_range <= max_lidar_range_opt){
+							if(obs_range <= adapt_max_range){
 
 
 								if(k_obs == 0){
@@ -2763,7 +2814,7 @@ class GapBarrier
 							obs_index = (start_indx_r_MPC + (int)(k*right_step)) % fused_ranges_MPC_tot.size();
 							double obs_range = static_cast<double>(fused_ranges_MPC_tot[obs_index]);
 
-							if(obs_range <= max_lidar_range_opt) {
+							if(obs_range <= adapt_max_range) {
 								if(k_obs == 0){
 									obstacle_points_r_MPC[0] = {obs_range*cos(lidar_transform_angles_tot[obs_index]), obs_range*sin(lidar_transform_angles_tot[obs_index])};
 								}
@@ -2783,10 +2834,16 @@ class GapBarrier
 								k_obs += 1;
 							}
 						}
+						
 						obstacle_points_l=obstacle_points_l_MPC, obstacle_points_r=obstacle_points_r_MPC;
+						if(num_MPC==0){
+							obstacle_points_l0=obstacle_points_l; obstacle_points_r0=obstacle_points_r;
+						}
+						else if(num_MPC==1){
+							obstacle_points_l1=obstacle_points_l; obstacle_points_r1=obstacle_points_r;
+						}
 					}
 
-					
 					
 
 					double alpha = 1;
@@ -2885,7 +2942,11 @@ class GapBarrier
 					startyplot[num_MPC]=starty;
 				
 					if(num_MPC<nMPC-1){//Prepare LIDAR data for next iteration, no longer constantly spaced lidar angles	
-						
+						if(num_MPC==0){
+							savex=xpt;
+							savey=ypt;
+							savetheta=theta_ref;
+						}
 						std::vector<float> lidar_transform = data->ranges;
 						double transform_coords[2][lidar_transform.size()];
 						for (int i=0;i<lidar_transform.size();i++)
@@ -2927,6 +2988,7 @@ class GapBarrier
 				std::vector<std::vector<double>> sub_bez_obs;
     			for(int i=0;i<fused_ranges_MPC_tot0.size();i++){
 					bez_obs.push_back({fused_ranges_MPC_tot0[i]*cos(lidar_transform_angles_tot0[i]),fused_ranges_MPC_tot0[i]*sin(lidar_transform_angles_tot0[i])});
+					
 				}
 
 				double obs_sep1=obs_sep;
@@ -2961,6 +3023,7 @@ class GapBarrier
 				// fprintf(file1,"*******************\n");
 				// fclose(file1);
 				printf("%NumObs: %d\n",num_obs);
+				
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
@@ -3023,7 +3086,7 @@ class GapBarrier
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, x_equality_con, &opt_params, tol);
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol);
 				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC+1, delta_inequality_con, &opt_params, tol1);
-				nlopt_add_inequality_mconstraint(opt, 3*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
+				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
 
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
@@ -3115,7 +3178,7 @@ class GapBarrier
 					}
 					
 					last_delta=deltas[1];
-					vel_adapt=vel_vehicle[1];
+					vel_adapt=std::max(0.0,vel_vehicle[1]);
 					printf("%lf, %lf\n",vel_adapt,last_delta);
 					// printf("********************\n");
 					// for(int i=0;i<nMPC*kMPC;i++){
@@ -3237,7 +3300,7 @@ class GapBarrier
 				//Publish the left obstacle points
 				lobs_marker.header.frame_id = "base_link";
 				lobs_marker.header.stamp = ros::Time::now();
-				lobs_marker.type = visualization_msgs::Marker::LINE_LIST;
+				lobs_marker.type = visualization_msgs::Marker::POINTS;
 				lobs_marker.id = 0; 
 				lobs_marker.action = visualization_msgs::Marker::ADD;
 				lobs_marker.scale.x = 0.1;
@@ -3251,16 +3314,12 @@ class GapBarrier
 				geometry_msgs::Point p3;
 				lobs_marker.points.clear();
 				int count=0;
-				for(int i=0;i<obstacle_points_l.size();i++){
-					double po1=obstacle_points_l[i][0];
-					double po2=obstacle_points_l[i][1];
+				for(int i=0;i<obstacle_points_l0.size();i++){
+					double po1=obstacle_points_l0[i][0];
+					double po2=obstacle_points_l0[i][1];
 					p3.x = po1;	p3.y = po2;	p3.z = 0;
 					lobs_marker.points.push_back(p3);	
 					count++;
-				}
-				if(count%2==1){
-					p3.x = 0;	p3.y = 0;	p3.z = 0; 
-					lobs_marker.points.push_back(p3);
 				}
 
 				lobs.publish(lobs_marker);
@@ -3268,7 +3327,7 @@ class GapBarrier
 				//Publish the right obstacle points
 				robs_marker.header.frame_id = "base_link";
 				robs_marker.header.stamp = ros::Time::now();
-				robs_marker.type = visualization_msgs::Marker::LINE_LIST;
+				robs_marker.type = visualization_msgs::Marker::POINTS;
 				robs_marker.id = 0; 
 				robs_marker.action = visualization_msgs::Marker::ADD;
 				robs_marker.scale.x = 0.1;
@@ -3284,24 +3343,75 @@ class GapBarrier
 				robs_marker.points.clear();
 				
 				count=0;
-				for(int i=0;i<obstacle_points_r.size();i++){
-					double po1=obstacle_points_r[i][0];
-					double po2=obstacle_points_r[i][1];
+				for(int i=0;i<obstacle_points_r0.size();i++){
+					double po1=obstacle_points_r0[i][0];
+					double po2=obstacle_points_r0[i][1];
 					p4.x = po1;	p4.y = po2;	p4.z = 0;
 				
 					robs_marker.points.push_back(p4);	
 					count++;
-				}
-				if(count%2==1){
-					p4.x = 0;	p4.y = 0;	p4.z = 0; 
-					robs_marker.points.push_back(p4);
 				}
 
 				robs.publish(robs_marker);
 
 
 
+				lobs_marker1.header.frame_id = "base_link";
+				lobs_marker1.header.stamp = ros::Time::now();
+				lobs_marker1.type = visualization_msgs::Marker::POINTS;
+				lobs_marker1.id = 0; 
+				lobs_marker1.action = visualization_msgs::Marker::ADD;
+				lobs_marker1.scale.x = 0.1;
+				lobs_marker1.color.a = 1.0;
+				lobs_marker1.color.r = 0.9; 
+				lobs_marker1.color.g = 0.1;
+				lobs_marker1.color.b = 0.5;
+				lobs_marker1.pose.orientation.w = 1;
+				
+				lobs_marker1.lifetime = ros::Duration(0.1);
+				geometry_msgs::Point p31;
+				lobs_marker1.points.clear();
+				count=0;
+				for(int i=0;i<obstacle_points_l1.size();i++){
+					double po1=savex+obstacle_points_l1[i][0]*cos(savetheta)-obstacle_points_l1[i][1]*sin(savetheta);
+					double po2=savey+obstacle_points_l1[i][0]*sin(savetheta)+obstacle_points_l1[i][1]*cos(savetheta);
+					p31.x = po1;	p31.y = po2;	p31.z = 0;
+					lobs_marker1.points.push_back(p31);	
+					count++;
+				}
 
+				lobs1.publish(lobs_marker1);
+
+				//Publish the right obstacle points
+				robs_marker1.header.frame_id = "base_link";
+				robs_marker1.header.stamp = ros::Time::now();
+				robs_marker1.type = visualization_msgs::Marker::POINTS;
+				robs_marker1.id = 0; 
+				robs_marker1.action = visualization_msgs::Marker::ADD;
+				robs_marker1.scale.x = 0.1;
+				robs_marker1.color.a = 1.0;
+				robs_marker1.color.r = 0.2; 
+				robs_marker1.color.g = 0.8;
+				robs_marker1.color.b = 0.1;
+				robs_marker1.pose.orientation.w = 1;
+				
+				robs_marker1.lifetime = ros::Duration(0.1);
+
+				geometry_msgs::Point p41;
+				robs_marker1.points.clear();
+				
+				count=0;
+				for(int i=0;i<obstacle_points_r1.size();i++){
+					double po1=savex+obstacle_points_r1[i][0]*cos(savetheta)-obstacle_points_r1[i][1]*sin(savetheta);
+					double po2=savey+obstacle_points_r1[i][0]*sin(savetheta)+obstacle_points_r1[i][1]*cos(savetheta);
+					
+					p41.x = po1;	p41.y = po2;	p41.z = 0;
+				
+					robs_marker1.points.push_back(p41);	
+					count++;
+				}
+
+				robs1.publish(robs_marker1);
 
 
 
@@ -3325,6 +3435,7 @@ class GapBarrier
 				velocity_MPC = velocity_scale*vehicle_velocity; //Implement slowing if we near an obstacle
 
 				vel_adapt=std::max(std::min(vel_adapt,max_speed),min_speed);
+				if(min_distance<stop_distance) {vel_adapt=0; stopped=1;}
 			}
 
 			ackermann_msgs::AckermannDriveStamped drive_msg; 
