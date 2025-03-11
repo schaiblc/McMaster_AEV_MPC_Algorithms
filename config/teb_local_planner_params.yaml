@@ -1,0 +1,16 @@
+# teb_local_planner_params.yaml
+
+ TebLocalPlannerROS:
+   max_vel_x: 0.5
+   max_vel_theta: 1.0
+   acc_lim_x: 0.5
+   acc_lim_theta: 1.0
+   min_obstacle_dist: 0.4
+   xy_goal_tolerance: 0.1
+   yaw_goal_tolerance: 0.1
+   robot_width: 0.5
+   robot_length: 0.5
+   footprint: [[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]]
+   global_plan_viapoint_sep: -1.0  # Avoids reliance on global plan
+   enable_homotopy_class_planning: false  # Prevents path switching
+   # Add any other relevant parameters
