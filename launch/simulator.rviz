@@ -230,6 +230,14 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
+      Marker Topic: /navigation_velocity/vehicle_detect
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
       Marker Topic: /navigation_bezier/vehicle_detect
       Name: Marker
       Namespaces:
@@ -239,6 +247,38 @@ Visualization Manager:
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /navigation_bezier/bez
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_velocity/lobs
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_velocity/robs
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_velocity/lobs1
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_velocity/robs1
       Name: Marker
       Namespaces:
         {}
@@ -256,6 +296,13 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: false
+    - Class: rviz/Map
+      Enabled: true
+      Name: Local Costmap
+      Topic: /move_base/local_costmap/costmap
+      Queue Size: 2
+      Alpha: 0.5
+      Color Scheme: costmap
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
