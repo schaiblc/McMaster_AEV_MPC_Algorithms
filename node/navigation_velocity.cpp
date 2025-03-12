@@ -3130,7 +3130,7 @@ class GapBarrier
 						}
 					}
 				}
-				
+				thetas[1]=thetas[0]+opt_params[0]*vel_vehicle[0]/opt_params[1]*tan(deltas[0]);
 				for(int i=1;i<nMPC*kMPC;i++){
 					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
 					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
@@ -3164,6 +3164,7 @@ class GapBarrier
 				if (optim < 0) {
 					ROS_INFO("Optimization Error %d",optim);
 					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
+					
 				}
 				else {
 					successful_opt=1;
