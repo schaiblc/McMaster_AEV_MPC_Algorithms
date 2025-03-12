@@ -229,8 +229,13 @@ heading_beam_angle: rad(pi/16)
 stop_distance: 0.4 #m
 stop_distance_decay: 0.5 #m
 
+#TEB & Comparison Waypoint Generation
+waypoint_distance: 1.0
+waypoint_count: 3
+use_manual_fwd: 0 #Doesn't seem to work. The existing methods rely heavily on accurate waypoints. Just comapre my MPC to tuned explore_lite
+
 #MPC Parameters
-nMPC: 3
+nMPC: 2
 kMPC: 8
 angle_thresh: 1
 map_thresh: 0.0
@@ -261,3 +266,9 @@ optim_mode: 1
 max_lidar_range_opt: 5.0
 # Determines if RGB-D camera is used
 use_camera: 1
+
+#Important tuning parameters
+#-> max_lidar_range_opt depending on hall width, sim map, etc
+#-> Max and min speeds for bezier (min speed>0) and velocity (min-speed can be 0)
+
+#For berlin.yaml, max_lidar_range_opt should be 3.0
