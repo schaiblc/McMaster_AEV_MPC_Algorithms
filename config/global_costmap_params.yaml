@@ -1,0 +1,22 @@
+global_costmap:
+  footprint: [[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]]
+  transform_tolerance: 0.5
+  global_frame: map
+  robot_base_frame: base_link
+  update_frequency: 5.0
+  publish_frequency: 5.0
+  resolution: 0.1
+  track_unknown_space: true  # Required for explore_lite
+  width: 40
+  height: 40 #Adjust these so that we have the map frame fixed and it covers our entire area of travel through the experiment or simulation
+  origin_x: -20
+  origin_y: -30
+  rolling_window: false #Map doesnt move with vehicle
+  obstacle_range: 5.0
+  raytrace_range: 5.5
+  inflation_radius: 0
+  cost_scaling_factor: 1.0
+  observation_persistence: 0.0
+  inf_is_valid: true
+  observation_sources: laser_scan
+  laser_scan: {sensor_frame: laser, data_type: LaserScan, topic: /scan, marking: true, clearing: true}
