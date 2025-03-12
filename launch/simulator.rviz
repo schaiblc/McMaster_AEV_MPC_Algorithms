@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /MarkerArray1
       Splitter Ratio: 0.5
     Tree Height: 435
   - Class: rviz/Selection
@@ -144,40 +145,40 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        back_left_wheel:
+        det_racecar_back_left_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        back_right_wheel:
+        det_racecar_back_right_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        base_link:
+        det_racecar_base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        front_left_hinge:
+        det_racecar_front_left_hinge:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        front_left_wheel:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        front_right_hinge:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        front_right_wheel:
+        det_racecar_front_left_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        laser_model:
+        det_racecar_front_right_hinge:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        det_racecar_front_right_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        det_racecar_laser_model:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -209,7 +210,7 @@ Visualization Manager:
       Marker Topic: /navigation/vehicle_detect
       Name: Marker
       Namespaces:
-        {}
+        "": true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -296,13 +297,34 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: false
-    - Class: rviz/Map
+    - Alpha: 0.5
+      Class: rviz/Map
+      Color Scheme: costmap
+      Draw Behind: false
       Enabled: true
       Name: Local Costmap
       Topic: /move_base/local_costmap/costmap
-      Queue Size: 2
-      Alpha: 0.5
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.5
+      Class: rviz/Map
       Color Scheme: costmap
+      Draw Behind: false
+      Enabled: true
+      Name: Global Costmap
+      Topic: /move_base/global_costmap/costmap
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /explore/frontiers
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -370,4 +392,4 @@ Window Geometry:
     collapsed: true
   Width: 1068
   X: 72
-  Y: 133
+  Y: 96
