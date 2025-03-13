@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Listen to messages from joysicks -->
+  <node pkg="joy" name="joy_node" type="joy_node">
+  <param name="autorepeat_rate" value="2"/>
+  </node>
+
+  <!-- Launch a map from the maps folder-->
+  <arg name="map" default="$(find f1tenth_simulator)/maps/berlin.yaml"/>
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
+
+  <!-- Launch the racecar model -->
+  <include file="$(find f1tenth_simulator)/launch/racecar_model.launch"/>
+
+  <!-- Begin the simulator with the parameters from params.yaml -->
+  <node pkg="f1tenth_simulator" name="f1tenth_simulator" type="simulator" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <!-- Launch the mux node with the parameters from params.yaml -->
+  <node pkg="f1tenth_simulator" name="mux_controller" type="mux" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <!-- Launch the behavior controller node with the parameters from params.yaml -->
+  <node pkg="f1tenth_simulator" name="behavior_controller" type="behavior_controller" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <!-- Launch the Random Walker Node -->
+  <node pkg="f1tenth_simulator" name="random_walker" type="random_walk" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <!-- Launch the Keyboard Node -->
+  <node pkg="f1tenth_simulator" name="keyboard" type="keyboard" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  <!-- Start the move_base node -->
+  <node pkg="move_base" type="move_base" name="move_base" output="screen">
+      <param name="controller_frequency" value="10.0" />  <!-- Change to your desired frequency -->
+      <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+      <rosparam file="$(find f1tenth_simulator)/config/local_costmap_params.yaml" command="load"/>
+      <rosparam file="$(find f1tenth_simulator)/config/global_costmap_params.yaml" command="load"/>
+      <rosparam file="$(find f1tenth_simulator)/config/dwa_local_planner_params.yaml" command="load" />
+  </node>
+
+    <!-- Start the explore_lite node for exploration -->
+  <rosparam file="$(find f1tenth_simulator)/config/explore_lite_params.yaml" command="load" />
+  <node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen"/>
+
+  <node pkg="f1tenth_simulator" name="collision_assistance" type="collision_assistance.py" output="screen">
+    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
+  </node>
+
+  
+    <!-- Launch realsense depth camera -->
+     
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+      <arg name="enable_color"                value="true"/>      
+      <arg name="enable_depth"                value="true"/>
+      <arg name="enable_sync"		              value="true"/>      
+  </include>
+    
+  <!-- Launch RVIZ -->
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find f1tenth_simulator)/launch/simulator.rviz" output="screen"/>
+</launch>
