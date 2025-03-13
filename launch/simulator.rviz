@@ -353,6 +353,24 @@ Visualization Manager:
       Queue Size: 10
       Line Style: Lines
       Line Width: 0.03
+    - Class: rviz/Path
+      Enabled: true
+      Name: Global Path
+      Topic: /move_base/DWAPlannerROS/global_plan
+      Unreliable: false
+      Color: 0; 0; 255  # Blue color
+      Queue Size: 10
+      Line Style: Lines
+      Line Width: 0.03
+    - Class: rviz/Path
+      Enabled: true
+      Name: Local Path
+      Topic: /move_base/DWAPlannerROS/local_plan
+      Unreliable: false
+      Color: 255; 0; 0
+      Queue Size: 10
+      Line Style: Lines
+      Line Width: 0.03
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
