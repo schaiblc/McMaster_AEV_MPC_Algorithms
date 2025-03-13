@@ -4,16 +4,24 @@ MpcLocalPlannerROS:
     
    ## Robot settings
   robot:
-    type: "simple_car"
-    simple_car:
-      wheelbase: 0.287
-      front_wheel_driving: False
+    # type: "kinematic_bicycle_vel_input"
+    # simple_car:
+    #   wheelbase: 0.287
+    #   front_wheel_driving: False
+    #   max_vel_x: 2.5
+    #   max_vel_x_backwards: 0
+    #   max_steering_angle: 0.4189
+    #   acc_lim_x: 2.5 # deactive bounds with zero
+    #   dec_lim_x: 2.5 # deactive bounds with zero
+    #   max_steering_rate: 2.0 # deactive bounds with zero
+    type: "unicycle"
+    unicycle:
       max_vel_x: 2.5
       max_vel_x_backwards: 0
-      max_steering_angle: 0.4189
+      max_vel_theta: 3.8
       acc_lim_x: 2.5 # deactive bounds with zero
       dec_lim_x: 2.5 # deactive bounds with zero
-      max_steering_rate: 2.0 # deactive bounds with zero
+      acc_lim_theta: 3.2 # deactivate bounds with zero
 
   ## Footprint model for collision avoidance
   footprint_model: # types: "point", "circular", "two_circles", "line", "polygon"
