@@ -9,6 +9,7 @@
 #include <ackermann_msgs/AckermannDriveStamped.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/Int32MultiArray.h>
 
@@ -16,6 +17,7 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/Twist.h>
 
 #include "f1tenth_simulator/pose_2d.hpp"
 #include "f1tenth_simulator/ackermann_kinematics.hpp"
@@ -27,8 +29,13 @@
 #include "f1tenth_simulator/st_kinematics.hpp"
 #include "f1tenth_simulator/precompute.hpp"
 
+#include <move_base_msgs/MoveBaseAction.h>
+#include <actionlib/client/simple_action_client.h>
+
+#include <tf/tf.h>
 #include <iostream>
 #include <math.h>
+
 
 
 using namespace racecar_simulator;
@@ -37,6 +44,8 @@ class RacecarSimulator {
 private:
     // A ROS node
     ros::NodeHandle n;
+
+    actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>* move_base_client;
 
     // The transformation frames used
     std::string map_frame, base_frame, scan_frame;
@@ -73,8 +82,13 @@ private:
     // A timer to update the pose
     ros::Timer update_pose_timer;
 
+    ros::Timer waypoint_timer;
+
     // Listen for drive commands
     ros::Subscriber drive_sub;
+
+    // Listen for drive commands (from ROS explore package)
+    ros::Subscriber explore_sub;
 
     // Listen for a map
     ros::Subscriber map_sub;
@@ -94,6 +108,11 @@ private:
 
     // publisher for map with obstacles
     ros::Publisher map_pub;
+
+    ros::Publisher waypoint_pub;
+    double waypoint_distance;
+    int waypoint_count;
+    int use_manual_fwd=0;
 
     // keep an original map for obstacles
     nav_msgs::OccupancyGrid original_map;
@@ -135,9 +154,12 @@ public:
         // Initialize the node handle
         n = ros::NodeHandle("~");
 
+        move_base_client = new actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction>("move_base", true);
+        move_base_client->waitForServer(ros::Duration(5.0));
+
         // Initialize car state and driving commands
         state = {.x=0, .y=0, .theta=0, .velocity=0, .steer_angle=0.0, .angular_velocity=0.0, .slip_angle=0.0, .st_dyn=false};
-        state_det.x=2; state_det.y=0; state_det.theta=0;
+        state_det.x=2; state_det.y=-8; state_det.theta=M_PI/2;
         accel = 0.0;
         steer_angle_vel = 0.0;
         desired_speed = 0.0;
@@ -145,7 +167,7 @@ public:
         previous_seconds = ros::Time::now().toSec();
 
         // Get the topic names
-        std::string drive_topic, map_topic, scan_topic, pose_topic, gt_pose_topic, 
+        std::string drive_topic, map_topic, scan_topic, pose_topic, gt_pose_topic, explore_topic, 
         pose_rviz_topic, odom_topic, imu_topic;
         n.getParam("drive_topic", drive_topic);
         n.getParam("map_topic", map_topic);
@@ -155,6 +177,8 @@ public:
         n.getParam("pose_rviz_topic", pose_rviz_topic);
         n.getParam("imu_topic", imu_topic);
         n.getParam("ground_truth_pose_topic", gt_pose_topic);
+        explore_topic="/cmd_vel";
+        n.getParam("use_manual_fwd",use_manual_fwd);
 
         // Get steering delay params
         n.getParam("buffer_length", buffer_length);
@@ -189,6 +213,9 @@ public:
         n.getParam("mass", params.mass);
         n.getParam("width", width);
 
+        n.getParam("waypoint_distance", waypoint_distance);
+        n.getParam("waypoint_count", waypoint_count);
+
         // clip velocity
         n.getParam("speed_clip_diff", speed_clip_diff);
 
@@ -220,11 +247,18 @@ public:
         // Make a publisher for ground truth pose
         pose_pub = n.advertise<geometry_msgs::PoseStamped>(gt_pose_topic, 1);
 
+        waypoint_pub = n.advertise<nav_msgs::Path>("/waypoints", 1);
+
         // Start a timer to output the pose
         update_pose_timer = n.createTimer(ros::Duration(update_pose_rate), &RacecarSimulator::update_pose, this);
 
+        waypoint_timer = n.createTimer(ros::Duration(0.1), &RacecarSimulator::generateWaypoints, this);
+
         // Start a subscriber to listen to drive commands
         drive_sub = n.subscribe(drive_topic, 1, &RacecarSimulator::drive_callback, this);
+
+        // Start a subscriber to listen to explore commands
+        explore_sub = n.subscribe(explore_topic, 1, &RacecarSimulator::explore_callback, this);
 
         // Start a subscriber to listen to new maps
         map_sub = n.subscribe(map_topic, 1, &RacecarSimulator::map_callback, this);
@@ -349,7 +383,7 @@ public:
 
         //Update state of vehicle detected and publish
         //////////////////////////////////////////////
-        state_det.x+=0.2*update_pose_rate;
+        state_det.y+=0.8*update_pose_rate;
 
         pub_pose_det_transform(timestamp);
 
@@ -571,6 +605,61 @@ public:
     void drive_callback(const ackermann_msgs::AckermannDriveStamped & msg) {
         desired_speed = msg.drive.speed;
         desired_steer_ang = msg.drive.steering_angle;
+    }
+
+    void explore_callback(const geometry_msgs::Twist::ConstPtr& msg) {
+        // desired_speed = std::max(0.0,msg->linear.x);
+        // desired_steer_ang=std::min(std::max(-max_steering_angle,msg->angular.z),max_steering_angle);
+        // printf("%lf, %lf\n",desired_speed, desired_steer_ang);
+
+        desired_speed = msg->linear.x;
+        if(msg->linear.x!=0){
+            desired_steer_ang = atan2(msg->angular.z * params.wheelbase, msg->linear.x);
+        }
+        else{
+            desired_steer_ang=0;
+        }
+        desired_speed=std::max(desired_speed,0.5);
+        desired_steer_ang=std::min(std::max(-max_steering_angle,desired_steer_ang),max_steering_angle);
+    }
+
+      void generateWaypoints(const ros::TimerEvent& event) {
+        if(use_manual_fwd==0){
+            return;
+        }
+
+        // Generate waypoints
+        nav_msgs::Path waypoints;
+        waypoints.header.frame_id = "map"; // Use appropriate frame
+        waypoints.header.stamp = ros::Time::now();
+
+        for (int i = 1; i <= waypoint_count; ++i) {
+            geometry_msgs::PoseStamped waypoint;
+            waypoint.header = waypoints.header;
+
+            // Calculate new waypoint position based on current position
+            waypoint.pose.position.x = state.x + i * waypoint_distance * cos(state.theta);
+            waypoint.pose.position.y = state.y + i * waypoint_distance * sin(state.theta);
+            waypoint.pose.position.z = state.theta;
+
+            // Orientation can be set to the current orientation or adjusted as needed
+            waypoint.pose.orientation = tf::createQuaternionMsgFromYaw(state.theta);
+
+            // Publish the waypoint to the move_base goal
+            move_base_msgs::MoveBaseGoal goal;
+            goal.target_pose.header.frame_id = "map";
+            goal.target_pose.header.stamp = ros::Time::now();
+            goal.target_pose.pose = waypoint.pose;
+
+            // Send the goal to the move_base action server
+            move_base_client->sendGoal(goal);
+
+            // Add waypoint to the path
+            waypoints.poses.push_back(waypoint);
+        }
+
+        // Publish the waypoints
+        waypoint_pub.publish(waypoints);
     }
 
     // button callbacks
