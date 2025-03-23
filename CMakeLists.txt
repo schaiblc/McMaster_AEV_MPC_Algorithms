@@ -100,7 +100,7 @@ add_message_files(
       CATKIN_DEPENDS 
       message_runtime
       cv_bridge
-      image_transport    
+      image_transport   
 
       		     
   )
@@ -127,11 +127,17 @@ add_message_files(
   find_path(QUADPROGPP_INCLUDE_DIR NAMES QuadProg++.hh)
   target_link_libraries(navigation ${QUADPROGPP_LIBRARIES})
   target_link_libraries(navigation_bezier ${QUADPROGPP_LIBRARIES})
+  target_link_libraries(navigation_velocity ${QUADPROGPP_LIBRARIES})
+  target_link_libraries(navigation_velocity_pursuit ${QUADPROGPP_LIBRARIES})
+  target_link_libraries(navigation_bezier_pursuit ${QUADPROGPP_LIBRARIES})
 
   find_library(NLOPT_LIBRARIES NAMES nlopt)
   find_path(NLOPT_INCLUDE_DIR NAMES nlopt.hpp)
   target_link_libraries(navigation ${NLOPT_LIBRARIES})
   target_link_libraries(navigation_bezier ${NLOPT_LIBRARIES})
+  target_link_libraries(navigation_velocity ${NLOPT_LIBRARIES})
+  target_link_libraries(navigation_velocity_pursuit ${NLOPT_LIBRARIES})
+  target_link_libraries(navigation_bezier_pursuit ${NLOPT_LIBRARIES})
 
 
 
