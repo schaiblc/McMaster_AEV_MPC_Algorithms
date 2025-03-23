@@ -2984,10 +2984,10 @@ class GapBarrier
 				}
 
 				//Select a subsample of all obstacles
-				std::vector<std::vector<double>> bez_obs;
-				std::vector<std::vector<double>> sub_bez_obs;
+				std::vector<std::vector<double>> vel_obs;
+				std::vector<std::vector<double>> sub_obs;
     			for(int i=0;i<fused_ranges_MPC_tot0.size();i++){
-					bez_obs.push_back({fused_ranges_MPC_tot0[i]*cos(lidar_transform_angles_tot0[i]),fused_ranges_MPC_tot0[i]*sin(lidar_transform_angles_tot0[i])});
+					vel_obs.push_back({fused_ranges_MPC_tot0[i]*cos(lidar_transform_angles_tot0[i]),fused_ranges_MPC_tot0[i]*sin(lidar_transform_angles_tot0[i])});
 					
 				}
 
@@ -2995,14 +2995,14 @@ class GapBarrier
 				int num_obs=100000;
 
 				while(num_obs>max_obs){
-					sub_bez_obs.clear();
-					for (const auto& obstacle : bez_obs) {
+					sub_obs.clear();
+					for (const auto& obstacle : vel_obs) {
 						// Accessing x and y coordinates
 						double x_ob = obstacle[0]; // x coordinate
 						double y_ob = obstacle[1]; // y coordinate
 						double min_dist=100;
 
-						for (const auto& obstacle1 : sub_bez_obs) {
+						for (const auto& obstacle1 : sub_obs) {
 							double mydist=pow(pow(obstacle1[0]-x_ob,2)+pow(obstacle1[1]-y_ob,2),0.5);
 							if(mydist<min_dist){
 								min_dist=mydist;
@@ -3012,11 +3012,11 @@ class GapBarrier
 							// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
 							// fprintf(file1,"%lf, %lf\n",obstacle[0],obstacle[1]);
 							// fclose(file1);
-							sub_bez_obs.push_back({obstacle[0],obstacle[1]});
+							sub_obs.push_back({obstacle[0],obstacle[1]});
 						}
 						
 					}
-					num_obs=sub_bez_obs.size();
+					num_obs=sub_obs.size();
 					obs_sep1=obs_sep1*1.1;
 				}
 				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
@@ -3078,8 +3078,8 @@ class GapBarrier
 				opt_params_vel.push_back(theta_band_diff);
 
 				for (int i=0; i<num_obs;i++){ //Add all subsampled obstacles to the parameters
-					opt_params_vel.push_back(sub_bez_obs[i][0]);
-					opt_params_vel.push_back(sub_bez_obs[i][1]);
+					opt_params_vel.push_back(sub_obs[i][0]);
+					opt_params_vel.push_back(sub_obs[i][1]);
 				}
 				
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, theta_equality_con, &opt_params, tol);
