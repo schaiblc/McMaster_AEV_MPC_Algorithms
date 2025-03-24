@@ -2473,10 +2473,10 @@ class GapBarrier
 
 
 			std::vector<float> fused_ranges = data->ranges;
-			if(use_camera)
-			{
-				if(cv_image_data_defined){ augment_camera(fused_ranges); }
-			}
+			// if(use_camera)
+			// {
+			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
+			// }
 
 	
 			// publish_lidar(mod_ranges);
@@ -2957,7 +2957,7 @@ class GapBarrier
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
 				ros::Time ott2 = ros::Time::now();
 				double opt_time2 = ott2.toSec();
-				// printf("Opt Time: %lf\n",opt_time2-opt_time1);
+				printf("OptTime: %lf, Evals: %d\n",opt_time2-opt_time1,nlopt_get_numevals(opt));
 
 				double bez_x2=0;
 				double bez_x3=0;
@@ -2975,10 +2975,11 @@ class GapBarrier
 				if (optim < 0) {
 					safe_distance_adapt=safe_distance_adapt/2;
 					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
-
+					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
 				}
 				else {
 					successful_opt=1;
+					printf("Successful Opt: %d\n",optim);
 					safe_distance_adapt=safe_distance;
 					//Save the control points here
 					printf("%lf, %lf, %lf, %lf, %lf SOLVED\n",x[0],x[1],x[2],x[3],x[4]);
