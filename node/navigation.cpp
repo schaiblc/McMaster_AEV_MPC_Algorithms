@@ -2192,10 +2192,10 @@ class GapBarrier
 
 
 			std::vector<float> fused_ranges = data->ranges;
-			if(use_camera)
-			{
-				if(cv_image_data_defined){ augment_camera(fused_ranges); }
-			}
+			// if(use_camera)
+			// {
+			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
+			// }
 
 	
 			// publish_lidar(mod_ranges);
@@ -2716,21 +2716,26 @@ class GapBarrier
 				int successful_opt=0;
 
 				double minf; /* `*`the` `minimum` `objective` `value,` `upon` `return`*` */
+				double opttime1=ros::Time::now().toSec();
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
+				double opttime2=ros::Time::now().toSec();
+				printf("OptTime: %lf, Evals: %d\n",opttime2-opttime1,nlopt_get_numevals(opt));
 
 				if(isnan(minf)){
 					forcestop=1;
+					printf("Nan error\n");
 				}
 				else{
 					forcestop=0;
 				}
 
 				if (optim < 0) {
-					ROS_INFO("Optimization Error");
-
+					ROS_INFO("Optimization Error %d",optim);
+					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
 				}
 				else {
 					successful_opt=1;
+					printf("Successful Opt: %d\n",optim);
 					for (int i=0;i<nMPC*kMPC;i++){
 						thetas[i]=x[i];
 						deltas[i]=x[i+nMPC*kMPC];
