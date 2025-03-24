@@ -2521,10 +2521,10 @@ class GapBarrier
 
 
 			std::vector<float> fused_ranges = data->ranges;
-			if(use_camera)
-			{
-				if(cv_image_data_defined){ augment_camera(fused_ranges); }
-			}
+			// if(use_camera)
+			// {
+			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
+			// }
 
 	
 			// publish_lidar(mod_ranges);
