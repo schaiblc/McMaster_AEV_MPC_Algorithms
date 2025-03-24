@@ -122,7 +122,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double pursue_y=xopt[0][1]; //Initial leader y pos, brought back by the distance we want to track behind
 	double lead_theta=xopt[1][1]; //Leader's initial theta
 	double lead_vel=xopt[0][2]; //Leader's constant velocity over traj
-	double radius_signed=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
+	double radius=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
 	double pursuit_weight=xopt[0][3]; //Weighting of pursuit term vs middle line MPC
 	double leader_detect=xopt[1][3]; //Whether leader is detected or not
 	double step_time=xopt[0][4]; //Time of each callback or discrete step for our states
@@ -137,54 +137,100 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double d_factor=1; //Change weighting of d vs d_dot terms
 	double d_dot_factor=30;
 	double delta_factor=0.1;
-	double vel_factor=0.1; //Scale importance of higher velocities (racing)
+	double vel_factor=0.1; //Scale importance of velocity term (constant v for no leader detection; min diff between ours, lead vel for OG MPC if detected; no term if pursuit)
+	double d_pursuit_factor=1;
+	double d_dot_pursuit_factor=1; //These are to scale base weightings wrt each other, when pursuit weight changes, will further change weighting distribution
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
 		}
 	}
 	for (int i=0;i<nMPC*kMPC;i++){
-			funcreturn=funcreturn+d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-			if(nanflag==0 && isnan(d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2))))){
-				printf("NAN1 %lf, %lf, %d\n",x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],i);
-				nanflag=1;
-			}
+		funcreturn=funcreturn+(1-pursuit_weight)*d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+	
+		if(grad){
+			grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+(1-pursuit_weight)*d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+			grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+(1-pursuit_weight)*d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+		}
+		if(grad&&i>0){
+			grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+(1-pursuit_weight)*d_dot_factor*2*track_line[0][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
+			grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+(1-pursuit_weight)*d_dot_factor*2*track_line[1][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
+		}
+		if(i<nMPC*kMPC-1){
+			funcreturn=funcreturn+(1-pursuit_weight)*d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+			
 			if(grad){
-				grad[2*nMPC*kMPC+i]=d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-				grad[3*nMPC*kMPC+i]=d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-(1-pursuit_weight)*d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-(1-pursuit_weight)*d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 			}
-			if(grad&&i>0){
-				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_factor*2*track_line[0][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
-				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_dot_factor*2*track_line[1][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
-			}
-			if(i<nMPC*kMPC-1){
-				funcreturn=funcreturn+d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-				if(nanflag==0 && isnan(d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)))){
-					printf("NAN2\n");
-					nanflag=1;
-				}
-				if(grad){
-					grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-				}
-			}
-			funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
-			if(nanflag==0 && isnan(delta_factor*pow(x[nMPC*kMPC+i],2))){
-				printf("NAN3\n");
-				nanflag=1;
-			}
-			if(grad){ //Prioritize lower steering angle magnitudes
-				grad[i]=0; //Gradients wrt theta = 0
-				grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
-			}
-			funcreturn=funcreturn+vel_factor/pow(x[4*nMPC*kMPC+i],2); //Prioritize higher velocities
-			if(nanflag==0 && isnan(vel_factor/pow(x[4*nMPC*kMPC+i],2))){
-				printf("NAN4\n");
-				nanflag=1;
-			}
+		}
+
+		funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
+		
+		if(grad){ //Prioritize lower steering angle magnitudes
+			grad[i]=0; //Gradients wrt theta = 0
+			grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
+		}
+
+		if(leader_detect==0 && i<nMPC*kMPC-1){ //Minimize change in vel if no detection
+			funcreturn=funcreturn+vel_factor*pow(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i],2);
 			if(grad){
-				grad[4*nMPC*kMPC+i]=-vel_factor*2/pow(x[4*nMPC*kMPC+i],3);
+				grad[4*nMPC*kMPC+i]=-vel_factor*2*(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]);
+				grad[4*nMPC*kMPC+i+1]=vel_factor*2*(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]);
 			}
+		}
+		else if(leader_detect==1){ //Minimize diff in vel wrt leader's vel if following OG MPC, for pursuit, disregard since we may need to speed, slow to pursue
+			funcreturn=funcreturn+(1-pursuit_weight)*vel_factor*pow(x[4*nMPC*kMPC+i]-lead_vel,2);
+			if(grad){
+				grad[4*nMPC*kMPC+i]=(1-pursuit_weight)*vel_factor*2*(x[4*nMPC*kMPC+i]-lead_vel);
+			}
+		}
+
+		//Now, incorporate the pursuit terms
+		if(leader_detect==1){
+			double xl_og=radius*sin(lead_vel*step_time*i/radius);
+			double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
+			double xv_og=lead_vel*cos(lead_vel*step_time*i/radius);
+			double yv_og=lead_vel*sin(lead_vel*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
+
+			double x_lead=pursue_x+xl_og*cos(lead_theta)-yl_og*sin(lead_theta);
+			double y_lead=pursue_y+xl_og*sin(lead_theta)+yl_og*cos(lead_theta); //future leader pos in base_link frame (wrt our pursuit vehicle)
+			double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
+			double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link fram (wrt our pursuit vehicle)
+
+			funcreturn=funcreturn+d_pursuit_factor*pursuit_weight*(pow(x[2*nMPC*kMPC+i]-x_lead,2)+pow(x[3*nMPC*kMPC+i]-y_lead,2)); //d^2 pursuit term
+			if(grad){
+				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_pursuit_factor*pursuit_weight*2*(x[2*nMPC*kMPC+i]-x_lead);
+				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_pursuit_factor*pursuit_weight*2*(x[3*nMPC*kMPC+i]-y_lead);
+			}
+
+			if(i<nMPC*kMPC-1){ //d_dot^2 pursuit term
+				double numer=pow((x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)+(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d),2);
+				double denom=pow(x[2*nMPC*kMPC+i]-x_lead,2)+pow(x[3*nMPC*kMPC+i]-y_lead,2);
+
+				funcreturn=funcreturn+d_dot_pursuit_factor*pursuit_weight*numer/denom;
+
+				double topp=0;
+				double botp=0;
+
+				//Gradient wrt x_i
+				topp=2*(x[2*nMPC*kMPC+i]-x_lead)*pow(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d,2)-2*pow(x[2*nMPC*kMPC+i]-x_lead,2)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d);
+				topp=topp+2*(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)*((x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)-(x[2*nMPC*kMPC+i]-x_lead));
+				botp=2*(x[2*nMPC*kMPC+i]-x_lead);
+				
+				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
+				
+				//Gradient wrt y_i
+
+				//Gradient wrt x_i+1
+
+				//Gradient wrt y_i+1
+
+			}
+
+			d_pursuit_factor
+			d_dot_pursuit_factor
+		}
 	}
 	// printf("%lf\n",funcreturn);
 	if(grad){
@@ -2536,8 +2582,10 @@ class GapBarrier
 				//Now, for the leader-follower MPC pursuit, determine if there is only one detection and it is being reasonably tracked
 				if(leader_detect==0){
 					if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
-						if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment 
-							leader_detect=1; //Leader detected
+						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
+							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment 
+								leader_detect=1; //Leader detected
+							}
 						}
 					}	
 				}
@@ -3122,16 +3170,25 @@ class GapBarrier
 
 				std::vector<double> opt_params_pursuit;
 				opt_params_pursuit.push_back(nMPC*kMPC+5); //Length of 1D params
-				opt_params_pursuit.push_back(car_detects[0].state[0]-pursuit_x); //Our target to follow trajectory in X
-				opt_params_pursuit.push_back(car_detects[0].state[1]-pursuit_y); //And Y
-				opt_params_pursuit.push_back(car_detects[0].state[2]); //Leader's theta
-				opt_params_pursuit.push_back(car_detects[0].state[3]); //Leader's constant velocity over traj
-				double delta_lead=0;
-				if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
-				else delta_lead=std::max(min_delta,car_detects[0].state[4]);
-				opt_params_pursuit.push_back(wheelbase/tan(delta_lead)); //Leader's circle arc radius, may need to use abs so we can use sign in some spots, abs radius other
-				if(leader_detect==1) opt_params_pursuit.push_back(pursuit_weight);
-				else opt_params_pursuit.push_back(0); //If no detection, do original MPC but still update the pursuit_weight in case we re-detect
+				if(leader_detect==1){ //Leader detected
+					opt_params_pursuit.push_back(car_detects[0].state[0]-pursuit_x); //Our target to follow trajectory in X
+					opt_params_pursuit.push_back(car_detects[0].state[1]-pursuit_y); //And Y
+					opt_params_pursuit.push_back(car_detects[0].state[2]); //Leader's theta
+					opt_params_pursuit.push_back(car_detects[0].state[3]); //Leader's constant velocity over traj
+					double delta_lead=0;
+					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
+					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
+					opt_params_pursuit.push_back(wheelbase/tan(delta_lead)); //Leader's circle arc (+ or -) radius, may need to use abs so we can use sign in some spots, abs radius other
+					opt_params_pursuit.push_back(pursuit_weight);
+				}
+				else{ //If no detection, do original MPC but still update the pursuit_weight in case we re-detect
+					opt_params_pursuit.push_back(0);
+					opt_params_pursuit.push_back(0);
+					opt_params_pursuit.push_back(0);
+					opt_params_pursuit.push_back(0);
+					opt_params_pursuit.push_back(0);
+					opt_params_pursuit.push_back(0);
+				}
 				opt_params_pursuit.push_back(leader_detect);
 				opt_params_pursuit.push_back(std::max(default_dt,dt)); //Time between discrete states, to convert the circle arc with vel of leader to discrete steps
 				opt_params_pursuit.push_back(0); //Placeholder to fill first 5 cols
