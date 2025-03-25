@@ -218,18 +218,25 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 				topp=topp+2*(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)*((x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)-(x[2*nMPC*kMPC+i]-x_lead));
 				botp=2*(x[2*nMPC*kMPC+i]-x_lead);
 				
-				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
+				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2); //Quotient Ruke
 				
 				//Gradient wrt y_i
+				topp=2*(x[3*nMPC*kMPC+i]-y_lead)*pow(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d,2)-2*pow(x[3*nMPC*kMPC+i]-y_lead,2)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d);
+				topp=topp+2*(x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)*((x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)-(x[3*nMPC*kMPC+i]-y_lead));
+				botp=2*(x[3*nMPC*kMPC+i]-y_lead);
+				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
 
 				//Gradient wrt x_i+1
+				topp=2*pow(x[2*nMPC*kMPC+i]-x_lead,2)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)+2*(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)*(x[2*nMPC*kMPC+i]-x_lead);
+				botp=0;
+				grad[2*nMPC*kMPC+i+1]=grad[2*nMPC*kMPC+i+1]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
 
 				//Gradient wrt y_i+1
+				topp=2*pow(x[3*nMPC*kMPC+i]-y_lead,2)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)+2*(x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)*(x[3*nMPC*kMPC+i]-y_lead);
+				botp=0;
+				grad[3*nMPC*kMPC+i+1]=grad[3*nMPC*kMPC+i+1]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
 
 			}
-
-			d_pursuit_factor
-			d_dot_pursuit_factor
 		}
 	}
 	// printf("%lf\n",funcreturn);
