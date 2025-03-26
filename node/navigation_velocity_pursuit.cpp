@@ -133,8 +133,8 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	//Gradient calculated based on three parts, d part, d_dot due to p_dot for both current and then next point (obj is only nonzero partial x & y)
 	double track_line[2][nMPC*kMPC];
 	for(int i=0;i<nMPC*kMPC;i++){
-		track_line[0][i]=xopt[0][i+6];
-		track_line[1][i]=xopt[1][i+6];
+		track_line[0][i]=xopt[0][i+7];
+		track_line[1][i]=xopt[1][i+7];
 	}
 	double funcreturn=0; //Create objective function as the sum of d and d_dot squared terms (d_dot part assumes constant w)
 	double d_factor=1; //Change weighting of d vs d_dot terms
@@ -596,12 +596,12 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 	double min_pursue=xopt[1][4]; //Minimum distance allowed between pursuit and leader vehicle
 	double veh_det_length=xopt[0][5]; //Leader vehicle length, for constructing box around center point of vehicle
 	double veh_det_width=xopt[1][5]; //Leader vehicle width, for constructing box around center point of vehicle
+	double vel_beta=xopt[0][6]; //Soft min smoothing constant
 	
-	//Gradient calculated based on three parts, d part, d_dot due to p_dot for both current and then next point (obj is only nonzero partial x & y)
 	double track_line[2][nMPC*kMPC];
 	for(int i=0;i<nMPC*kMPC;i++){
-		track_line[0][i]=xopt[0][i+6];
-		track_line[1][i]=xopt[1][i+6];
+		track_line[0][i]=xopt[0][i+7];
+		track_line[1][i]=xopt[1][i+7];
 	}
 
 	if(result){
@@ -619,7 +619,8 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 	//Find softmin dist between follower, leader vehicles over all time steps in the trajectory & for the four corners of the vehicle box
 	//Each point along trajectory has four points, the gradient wrt x_i & y_i only involves numerator terms at that time step. Others wrt x_i, y_i = 0 so ignore
 	double sum_dist=0;
-	for(int i=0;i<nMPC*kMPC;i++){
+	double curdist=0;
+	for(int i=0;i<nMPC*kMPC;i++){ //Just one, big softmin distance constraint
 		double xl_og=radius*sin(lead_vel*step_time*i/radius);
 		double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
 		double xv_og=lead_vel*cos(lead_vel*step_time*i/radius);
@@ -629,10 +630,27 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		double y_lead=pursue_y+xl_og*sin(lead_theta)+yl_og*cos(lead_theta); //future leader pos in base_link frame (wrt our pursuit vehicle)
 		double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
 		double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link fram (wrt our pursuit vehicle)
-		//Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle for the four box corners
-	}
-	
+		
+		double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle for the four box corners
+		double lead_ptsx[4]; double lead_ptsy[4];
+		lead_ptsx[0]=x_lead+veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[0]=y_lead+veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
+		lead_ptsx[1]=x_lead+veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[1]=y_lead+veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
+		lead_ptsx[2]=x_lead-veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[2]=y_lead-veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
+		lead_ptsx[3]=x_lead-veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[3]=y_lead-veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
 
+		//Sum distance for this point, find the numerator at least for this gradient wrt x_i & y_i
+		for(int j=0;j<4;j++){
+			curdist=sqrt(pow(x[2*nMPC*kMPC+i]-lead_ptsx[j],2)+pow(x[3*nMPC*kMPC+i]-lead_ptsy[j],2));
+			sum_dist+=exp(-vel_beta*curdist);
+			grad[2*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[2*nMPC*kMPC+i]-lead_ptsx[j])/curdist;
+			grad[3*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[3*nMPC*kMPC+i]-lead_ptsy[j])/curdist;
+		}	
+	}
+	for(int i=0;i<nMPC*kMPC;i++){
+		grad[2*nMPC*kMPC+i]=-grad[2*nMPC*kMPC+i]/result[0]; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
+		grad[3*nMPC*kMPC+i]=-grad[3*nMPC*kMPC+i]/result[0];
+	}
+	result[0]=1.0/double(vel_beta)*log(result[0])+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 
 }
 
@@ -3238,7 +3256,7 @@ class GapBarrier
 				nlopt_set_upper_bound(opt, 0, 0);
 
 				std::vector<double> opt_params_pursuit;
-				opt_params_pursuit.push_back(nMPC*kMPC+6); //Length of 1D params
+				opt_params_pursuit.push_back(nMPC*kMPC+7); //Length of 1D params
 				if(leader_detect==1){ //Leader detected
 					opt_params_pursuit.push_back(car_detects[0].state[0]-pursuit_x); //Our target to follow trajectory in X
 					opt_params_pursuit.push_back(car_detects[0].state[1]-pursuit_y); //And Y
@@ -3263,6 +3281,8 @@ class GapBarrier
 				opt_params_pursuit.push_back(min_pursue); //Minimum distance allowed between pursuit and leader vehicle
 				opt_params_pursuit.push_back(veh_det_length); //Leader vehicle length, for constructing box around center point of vehicle
 				opt_params_pursuit.push_back(veh_det_width); //Leader vehicle width, for constructing box around center point of vehicle
+				opt_params_pursuit.push_back(vel_beta);
+				opt_params_pursuit.push_back(0);
 				for(int i=0; i<nMPC*kMPC;i++){
 					opt_params_pursuit.push_back(track_line[0][i]);
 					opt_params_pursuit.push_back(track_line[1][i]);
