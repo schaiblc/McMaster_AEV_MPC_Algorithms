@@ -608,6 +608,17 @@ class GapBarrier
 		int startcheck=0;
 		int forcestop=0;
 
+		//Leader-follower MPC pursuit params
+                double pursuit_weight=0;
+                double leader_detect=0;
+                double MPC_dist=0;
+                double pursuit_dist=0;
+                double transit_rate=0;
+                double min_pursue=0;
+                double min_delta=0;
+                double pursuit_x=0;
+                double pursuit_y=0;
+
 		double speed_to_erpm_gain, speed_to_erpm_offset;
 		double steering_angle_to_servo_gain, steering_angle_to_servo_offset;
 		std_msgs::Float64 last_servo_state;
@@ -823,6 +834,15 @@ class GapBarrier
 			nf.getParam("bez_t_end", bez_t_end);
 			nf.getParam("obs_sep", obs_sep);
 			nf.getParam("max_obs", max_obs);
+
+			//Leader-follower MPC pursuit
+                        nf.getParam("MPC_dist", MPC_dist);
+                        nf.getParam("pursuit_dist", pursuit_dist);
+                        nf.getParam("transit_rate", transit_rate);
+                        nf.getParam("min_pursue", min_pursue);
+                        nf.getParam("min_delta", min_delta);
+                        nf.getParam("pursuit_x", pursuit_x);
+                        nf.getParam("pursuit_y", pursuit_y);
 
 			//timing
 			nf.getParam("stop_time1", stop_time1);
@@ -2240,7 +2260,8 @@ class GapBarrier
 				dt=default_dt;
 			}
 			prev_time = current_time;
-			
+
+			leader_detect=0;
 
 
 			//Vehicle tracking even if we aren't currently driving
@@ -2445,6 +2466,20 @@ class GapBarrier
 					printf("%d\n",car_detects[q].miss_fr);
 				}
 
+				//Now, for the leader-follower MPC pursuit, determine if there is only one detection and it is being reasonably tracked
+                                if(leader_detect==0){
+                                        if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
+                                                if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
+                                                        if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
+                                                                leader_detect=1; //Leader detected
+                                                        }
+                                                }
+                                        }        
+                                }
+                                else{
+                                        leader_detect=-1; //More than 1 vehicle detected, don't pursue
+                                }
+
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
 
@@ -2526,6 +2561,16 @@ class GapBarrier
 				std::vector<double> wc = {0.0, 0.0};
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
+				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately
+                                for(int i=0; i<fused_ranges_MPC.size();i++){
+                                        double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
+                                        double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
+                                        
+                                        if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
+                                                fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+                                        }
+                                }
+
 				for (int num_MPC=0;num_MPC<bez_ctrl_pts-3;num_MPC++){
 					std::vector<float> fused_ranges_MPC_tot=fused_ranges_MPC;
 					std::vector<double> lidar_transform_angles_tot=lidar_transform_angles; //The cumulative ranges and angles for both map (if used) and lidar
@@ -2571,7 +2616,9 @@ class GapBarrier
 						
 					}
 
-					if(use_neural_net){ //Augment LIDAR with detected vehicle projected paths as well
+					if(leader_detect<1) leader_detect=0;
+					
+					if(use_neural_net && leader_detect==0){ //Augment LIDAR with detected vehicle projected paths as well, only if mutliple detects, not following
 						std::vector<float> fused_ranges_MPC_veh_det;
 						std::vector<double> lidar_transform_angles_veh_det; //These are the additional ranges & angles from vehicle detections that will be sorted, included in obs calculations
 						int mult_factor=1; //This way, we get 2x amount of points for detections, improves the augmentation of LIDAR data
