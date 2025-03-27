@@ -610,7 +610,7 @@ class GapBarrier
 
 		//Leader-follower MPC pursuit params
 		double pursuit_weight=0;
-		double leader_detect=0;
+		int leader_detect=0;
 		double MPC_dist=0;
 		double pursuit_dist=0;
 		double transit_rate=0;
