@@ -2471,7 +2471,9 @@ class GapBarrier
 					if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
 						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
 							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
-								leader_detect=1; //Leader detected
+								if(tan(car_detects[q].state[4])/wheelbase*bez_t_end*car_detects[q].state[3]<2*M_PI){ //Doesn't complete full rotation of 2*PI over the future trajectory
+									leader_detect=1; //Leader detected
+								}
 							}
 						}
 					}        
@@ -2943,6 +2945,27 @@ class GapBarrier
 				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
 				// fprintf(file1,"*******************\n");
 				// fclose(file1);
+
+				//Find the desired bezier control points for the leader trajectory
+				double bez_pts[2][4];
+				double radius=std::abs(wheelbase/tan(car_detects[i].state[4]));
+				if(leader_detect==1){
+					double x_fin=radius*sin(bez_t_end*car_detects[i].state[3]/radius);
+					double y_fin=radius*(1.0-cos(bez_t_end*car_detects[i].state[3]/radius));
+					double ang_gap=bez_t_end*car_detects[i].state[3]/radius;
+					if(car_detects[i].state[4]<0){
+						ang_gap*=-1;
+					}
+					
+
+				}
+				else{
+					bez_pts[0][0]=0; bez_pts[1][0]=0;
+					bez_pts[0][1]=0; bez_pts[1][1]=0;
+					bez_pts[0][2]=0; bez_pts[1][2]=0;
+					bez_pts[0][3]=0; bez_pts[1][3]=0;
+				}
+				
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
@@ -3100,22 +3123,14 @@ class GapBarrier
 				//Update the min_dist to weight middle-line MPC vs. pursuit of leader
 				//***************************************************************** */
 				if(successful_opt==1){
-					double min_dist=100;
-					for(int i=0;i<nMPC*kMPC;i++){
-						for(int j=0; j<num_obs;j++){
-							if(pow(pow(x_vehicle[i]-sub_bez_obs[j][0],2)+pow(y_vehicle[i]-sub_bez_obs[j][1],2),0.5)<min_dist){ //New min_dist along trajectory
-								min_dist=pow(pow(x_vehicle[i]-sub_bez_obs[j][0],2)+pow(y_vehicle[i]-sub_bez_obs[j][1],2),0.5);
-							}
-						}
-					}
 					double aval=2*transit_rate/(pursuit_dist-MPC_dist);
 					double bval=-transit_rate-2*transit_rate*MPC_dist/(pursuit_dist-MPC_dist);
-					double update_weight=aval*min_dist+bval; //Linear eqn for update weight
+					double update_weight=aval*min_dist1+bval; //Linear eqn for update weight
 					update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
 					
 					pursuit_weight=pursuit_weight+update_weight; //Update prusuit weight term
 					pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
-					printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist, update_weight);
+					printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist1, update_weight);
 				}
 				//***************************************************************** */
 
