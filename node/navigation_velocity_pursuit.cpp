@@ -124,7 +124,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double lead_vel=xopt[0][2]; //Leader's constant velocity over traj
 	double radius=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
 	double pursuit_weight=xopt[0][3]; //Weighting of pursuit term vs middle line MPC
-	double leader_detect=xopt[1][3]; //Whether leader is detected or not
+	int leader_detect=static_cast<int>(xopt[1][3]); //Whether leader is detected or not
 	double step_time=xopt[0][4]; //Time of each callback or discrete step for our states
 	double min_pursue=xopt[1][4]; //Minimum distance allowed between pursuit and leader vehicle
 	double veh_det_length=xopt[0][5]; //Leader vehicle length, for constructing box around center point of vehicle
@@ -591,7 +591,7 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 	double lead_vel=xopt[0][2]; //Leader's constant velocity over traj
 	double radius=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
 	double pursuit_weight=xopt[0][3]; //Weighting of pursuit term vs middle line MPC
-	double leader_detect=xopt[1][3]; //Whether leader is detected or not
+	int leader_detect=static_cast<int>(xopt[1][3]); //Whether leader is detected or not
 	double step_time=xopt[0][4]; //Time of each callback or discrete step for our states
 	double min_pursue=xopt[1][4]; //Minimum distance allowed between pursuit and leader vehicle
 	double veh_det_length=xopt[0][5]; //Leader vehicle length, for constructing box around center point of vehicle
@@ -782,7 +782,7 @@ class GapBarrier
 
 		//Leader-follower MPC pursuit params
 		double pursuit_weight=0;
-		double leader_detect=0;
+		int leader_detect=0;
 		double MPC_dist=0;
 		double pursuit_dist=0;
 		double transit_rate=0;
@@ -2472,7 +2472,6 @@ class GapBarrier
 				else car_detects[q].miss_fr=0; //Found, reset consecutive missed frames to 0
 				
 			}
-
 			for(int q=0; q<car_detects.size();q++){ //Run the KF for every current detections here
 				// printf("%d: %lf\n",q,pow(pow(car_detects[q].meas[0],2)+pow(car_detects[q].meas[0],2),0.5));
 				// printf("%d, %d, %d, %d\n",car_detects[q].bound_box[0],car_detects[q].bound_box[1],car_detects[q].bound_box[2],car_detects[q].bound_box[3]);
@@ -3433,7 +3432,6 @@ class GapBarrier
 				startcheck=1;
 
 				nlopt_destroy(opt);
-
 				//Update the min_dist to weight middle-line MPC vs. pursuit of leader
 				//***************************************************************** */
 				if(successful_opt==1){
@@ -3450,9 +3448,12 @@ class GapBarrier
 					double update_weight=aval*min_dist+bval; //Linear eqn for update weight
 					update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
 					
-					pursuit_weight=pursuit_weight+update_weight; //Update prusuit weight term
+					pursuit_weight=pursuit_weight+update_weight; //Update pursuit weight term
 					pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
 					printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist, update_weight);
+					printf("Leader: %d\n",car_detects.size());
+					printf("%lf, %lf, %lf, %lf, %lf\n",car_detects[0].state[0],car_detects[0].state[1],car_detects[0].state[2],car_detects[0].state[3],car_detects[0].state[4]);
+					printf("Leader Detect: %d\n",leader_detect);
 				}
 
 				//***************************************************************** */
@@ -3744,5 +3745,4 @@ int main(int argc, char **argv){
 		}
 
 }
-
 
