@@ -609,15 +609,15 @@ class GapBarrier
 		int forcestop=0;
 
 		//Leader-follower MPC pursuit params
-                double pursuit_weight=0;
-                double leader_detect=0;
-                double MPC_dist=0;
-                double pursuit_dist=0;
-                double transit_rate=0;
-                double min_pursue=0;
-                double min_delta=0;
-                double pursuit_x=0;
-                double pursuit_y=0;
+		double pursuit_weight=0;
+		double leader_detect=0;
+		double MPC_dist=0;
+		double pursuit_dist=0;
+		double transit_rate=0;
+		double min_pursue=0;
+		double min_delta=0;
+		double pursuit_x=0;
+		double pursuit_y=0;
 
 		double speed_to_erpm_gain, speed_to_erpm_offset;
 		double steering_angle_to_servo_gain, steering_angle_to_servo_offset;
@@ -836,13 +836,13 @@ class GapBarrier
 			nf.getParam("max_obs", max_obs);
 
 			//Leader-follower MPC pursuit
-                        nf.getParam("MPC_dist", MPC_dist);
-                        nf.getParam("pursuit_dist", pursuit_dist);
-                        nf.getParam("transit_rate", transit_rate);
-                        nf.getParam("min_pursue", min_pursue);
-                        nf.getParam("min_delta", min_delta);
-                        nf.getParam("pursuit_x", pursuit_x);
-                        nf.getParam("pursuit_y", pursuit_y);
+			nf.getParam("MPC_dist", MPC_dist);
+			nf.getParam("pursuit_dist", pursuit_dist);
+			nf.getParam("transit_rate", transit_rate);
+			nf.getParam("min_pursue", min_pursue);
+			nf.getParam("min_delta", min_delta);
+			nf.getParam("pursuit_x", pursuit_x);
+			nf.getParam("pursuit_y", pursuit_y);
 
 			//timing
 			nf.getParam("stop_time1", stop_time1);
@@ -2467,18 +2467,18 @@ class GapBarrier
 				}
 
 				//Now, for the leader-follower MPC pursuit, determine if there is only one detection and it is being reasonably tracked
-                                if(leader_detect==0){
-                                        if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
-                                                if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
-                                                        if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
-                                                                leader_detect=1; //Leader detected
-                                                        }
-                                                }
-                                        }        
-                                }
-                                else{
-                                        leader_detect=-1; //More than 1 vehicle detected, don't pursue
-                                }
+				if(leader_detect==0){
+					if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
+						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
+							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
+								leader_detect=1; //Leader detected
+							}
+						}
+					}        
+				}
+				else{
+					leader_detect=-1; //More than 1 vehicle detected, don't pursue
+				}
 
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
@@ -2562,14 +2562,14 @@ class GapBarrier
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
 				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately
-                                for(int i=0; i<fused_ranges_MPC.size();i++){
-                                        double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
-                                        double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
-                                        
-                                        if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
-                                                fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
-                                        }
-                                }
+				for(int i=0; i<fused_ranges_MPC.size();i++){
+					double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
+					double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
+					
+					if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
+						fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+					}
+				}
 
 				for (int num_MPC=0;num_MPC<bez_ctrl_pts-3;num_MPC++){
 					std::vector<float> fused_ranges_MPC_tot=fused_ranges_MPC;
@@ -3098,26 +3098,26 @@ class GapBarrier
 				nlopt_destroy(opt);
 
 				//Update the min_dist to weight middle-line MPC vs. pursuit of leader
-                                //***************************************************************** */
-                                if(successful_opt==1){
-                                        double min_dist=100;
-                                        for(int i=0;i<nMPC*kMPC;i++){
-                                                for(int j=0; j<num_obs;j++){
-                                                        if(pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5)<min_dist){ //New min_dist along trajectory
-                                                                min_dist=pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5);
-                                                        }
-                                                }
-                                        }
-                                        double aval=2*transit_rate/(pursuit_dist-MPC_dist);
-                                        double bval=-transit_rate-2*transit_rate*MPC_dist/(pursuit_dist-MPC_dist);
-                                        double update_weight=aval*min_dist+bval; //Linear eqn for update weight
-                                        update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
-                                        
-                                        pursuit_weight=pursuit_weight+update_weight; //Update prusuit weight term
-                                        pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
-                                        printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist, update_weight);
-                                }
-                                //***************************************************************** */
+				//***************************************************************** */
+				if(successful_opt==1){
+					double min_dist=100;
+					for(int i=0;i<nMPC*kMPC;i++){
+						for(int j=0; j<num_obs;j++){
+							if(pow(pow(x_vehicle[i]-sub_bez_obs[j][0],2)+pow(y_vehicle[i]-sub_bez_obs[j][1],2),0.5)<min_dist){ //New min_dist along trajectory
+								min_dist=pow(pow(x_vehicle[i]-sub_bez_obs[j][0],2)+pow(y_vehicle[i]-sub_bez_obs[j][1],2),0.5);
+							}
+						}
+					}
+					double aval=2*transit_rate/(pursuit_dist-MPC_dist);
+					double bval=-transit_rate-2*transit_rate*MPC_dist/(pursuit_dist-MPC_dist);
+					double update_weight=aval*min_dist+bval; //Linear eqn for update weight
+					update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
+					
+					pursuit_weight=pursuit_weight+update_weight; //Update prusuit weight term
+					pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
+					printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist, update_weight);
+				}
+				//***************************************************************** */
 
 
 				//Publish the optimal path via NLOPT
@@ -3358,5 +3358,4 @@ int main(int argc, char **argv){
 		}
 
 }
-
 
