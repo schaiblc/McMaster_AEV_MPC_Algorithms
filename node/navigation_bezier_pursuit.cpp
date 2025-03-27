@@ -3097,6 +3097,28 @@ class GapBarrier
 
 				nlopt_destroy(opt);
 
+				//Update the min_dist to weight middle-line MPC vs. pursuit of leader
+                                //***************************************************************** */
+                                if(successful_opt==1){
+                                        double min_dist=100;
+                                        for(int i=0;i<nMPC*kMPC;i++){
+                                                for(int j=0; j<num_obs;j++){
+                                                        if(pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5)<min_dist){ //New min_dist along trajectory
+                                                                min_dist=pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5);
+                                                        }
+                                                }
+                                        }
+                                        double aval=2*transit_rate/(pursuit_dist-MPC_dist);
+                                        double bval=-transit_rate-2*transit_rate*MPC_dist/(pursuit_dist-MPC_dist);
+                                        double update_weight=aval*min_dist+bval; //Linear eqn for update weight
+                                        update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
+                                        
+                                        pursuit_weight=pursuit_weight+update_weight; //Update prusuit weight term
+                                        pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
+                                        printf("Pursuit Weight %lf, %lf, %lf\n",pursuit_weight,min_dist, update_weight);
+                                }
+                                //***************************************************************** */
+
 
 				//Publish the optimal path via NLOPT
 				marker.header.frame_id = "base_link";
