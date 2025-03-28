@@ -45,6 +45,7 @@
 
 //standard and external
 #include <stdio.h>
+#include <string.h>
 #include <math.h> //cosf
 #include <cmath> //M_PI, round
 #include <sstream>
@@ -122,6 +123,14 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double bez_alpha=xopt[1][1]; //Shaping of the exponential decay for further points
 	double x1=xopt[0][2]; //These are fixed by initial conditions and thus aren't variables in optimization
 	double y2=xopt[1][2];
+	double x2_lead=xopt[0][3];
+	double x3_lead=xopt[0][4];
+	double y3_lead=xopt[1][4];
+	double x4_lead=xopt[0][5];
+	double y4_lead=xopt[1][5];
+	double pursuit_weight=xopt[0][6];
+	double leader_detect=xopt[1][6];
+	
 	std::vector<std::vector<double>> bez_curv;
 	//Optimization variables:
 	//[0] -> x2
@@ -153,7 +162,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		double px4=pow(t,4);
 		double py4=px4;
 		for(int j=0;j<cols-3;j++){
-			double dist2= pow(bez_curv[i][0]-xopt[0][j+3],2)+pow(bez_curv[i][1]-xopt[1][j+3],2); //Squared distance
+			double dist2= pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2); //Squared distance
 			// printf("D2: %e, %e\n",(1/dist2)*exp(-bez_alpha*dist2),funcreturn);
 			
 			// if(bez_alpha*dist2>100) continue; //Numerical error since too small so skip this obs
@@ -161,11 +170,11 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			funcreturn=funcreturn+(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
 			//Next, find grad for each of five variables
 			if(grad){
-	/* x2 */ 	grad[0]=grad[0]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
-	/* x3 */ 	grad[1]=grad[1]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
-	/* y3 */ 	grad[2]=grad[2]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
-	/* x4 */ 	grad[3]=grad[3]-2*(bez_curv[i][0]-xopt[0][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
-	/* y4 */ 	grad[4]=grad[4]-2*(bez_curv[i][1]-xopt[1][j+3])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
+	/* x2 */ 	grad[0]=grad[0]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
+	/* x3 */ 	grad[1]=grad[1]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
+	/* y3 */ 	grad[2]=grad[2]-2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
+	/* x4 */ 	grad[3]=grad[3]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
+	/* y4 */ 	grad[4]=grad[4]-2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
 			}
 
 		}
@@ -2947,23 +2956,61 @@ class GapBarrier
 				// fclose(file1);
 
 				//Find the desired bezier control points for the leader trajectory
-				double bez_pts[2][4];
-				double radius=std::abs(wheelbase/tan(car_detects[i].state[4]));
+				double bez_pts[2][5];
+				double radius=std::abs(wheelbase/tan(car_detects[0].state[4]));
 				if(leader_detect==1){
-					double x_fin=radius*sin(bez_t_end*car_detects[i].state[3]/radius);
-					double y_fin=radius*(1.0-cos(bez_t_end*car_detects[i].state[3]/radius));
-					double ang_gap=bez_t_end*car_detects[i].state[3]/radius;
-					if(car_detects[i].state[4]<0){
+					double x_fin=radius*sin(bez_t_end*car_detects[0].state[3]/radius);
+					double y_fin=radius*(1.0-cos(bez_t_end*car_detects[0].state[3]/radius));
+					double ang_gap=bez_t_end*car_detects[0].state[3]/radius;
+					if(car_detects[0].state[4]<0){
 						ang_gap*=-1;
 					}
-					
+					double uval_num=3*cos(ang_gap/2)*sin(ang_gap/2)-2*sin(ang_gap/2)+4*sqrt(2)*pow(sin(ang_gap/4),3);
+					double uval=uval_num/(2*pow(cos(ang_gap/2),2);
+					double rval=8/3-5/3*cos(ang_gap/2)-4/3*uval*sin(ang_gap/2);
+						
+					bez_pts[0][0]=1; bez_pts[1][0]=0;
+					bez_pts[0][1]=1; bez_pts[1][1]=uval;
+					bez_pts[0][2]=rval*cos(ang_gap/2); bez_pts[1][2]=rval*sin(ang_gap/2);
+					bez_pts[0][3]=cos(ang_gap)+uval*sin(ang_gap); bez_pts[1][3]=sin(ang_gap)-uval*cos(ang_gap);
+					bez_pts[0][4]=cos(ang_gap); bez_pts[1][4]=sin(ang_gap);
 
+					//Multiply by R and subtract R from x coords to scale and reset to 0,0 base point
+					bez_pts[0][0]=bez_pts[0][0]*radius-radius; bez_pts[1][0]=bez_pts[1][0]*radius;
+					bez_pts[0][1]=bez_pts[0][1]*radius-radius; bez_pts[1][1]=bez_pts[1][1]*radius;
+					bez_pts[0][2]=bez_pts[0][2]*radius-radius; bez_pts[1][2]=bez_pts[1][2]*radius;
+					bez_pts[0][3]=bez_pts[0][3]*radius-radius; bez_pts[1][3]=bez_pts[1][3]*radius;
+					bez_pts[0][4]=bez_pts[0][4]*radius-radius; bez_pts[1][4]=bez_pts[1][4]*radius;
+
+					//Now, apply transform from leader to pursuer frame
+					double copy[2][5];
+					memcpy(copy, bez_pts, sizeof(bez_pts));  // Copy entire array
+					double theta_rot=car_detects[0].state[2];
+					if(car_detects[0].state[4]<0){ //Circular arc going the opposite direction of curvature
+						theta_rot+=M_PI;
+					}
+					bez_pts[0][0]=car_detects[0].state[0]+copy[0][0]*cos(theta_rot)-copy[1][0]*sin(theta_rot);
+					bez_pts[1][0]=car_detects[0].state[1]+copy[0][0]*sin(theta_rot)+copy[1][0]*cos(theta_rot);
+					
+					bez_pts[0][1]=car_detects[0].state[0]+copy[0][1]*cos(theta_rot)-copy[1][1]*sin(theta_rot);
+					bez_pts[1][1]=car_detects[0].state[1]+copy[0][1]*sin(theta_rot)+copy[1][1]*cos(theta_rot);
+
+					bez_pts[0][2]=car_detects[0].state[0]+copy[0][2]*cos(theta_rot)-copy[1][2]*sin(theta_rot);
+					bez_pts[1][2]=car_detects[0].state[1]+copy[0][2]*sin(theta_rot)+copy[1][2]*cos(theta_rot);
+
+					bez_pts[0][3]=car_detects[0].state[0]+copy[0][3]*cos(theta_rot)-copy[1][3]*sin(theta_rot);
+					bez_pts[1][3]=car_detects[0].state[1]+copy[0][3]*sin(theta_rot)+copy[1][3]*cos(theta_rot);
+
+					bez_pts[0][4]=car_detects[0].state[0]+copy[0][4]*cos(theta_rot)-copy[1][4]*sin(theta_rot);
+					bez_pts[1][4]=car_detects[0].state[1]+copy[0][4]*sin(theta_rot)+copy[1][4]*cos(theta_rot);
+					
 				}
-				else{
+				else{ //No leader detected, just set to 0 placeholders
 					bez_pts[0][0]=0; bez_pts[1][0]=0;
 					bez_pts[0][1]=0; bez_pts[1][1]=0;
 					bez_pts[0][2]=0; bez_pts[1][2]=0;
 					bez_pts[0][3]=0; bez_pts[1][3]=0;
+					bez_pts[0][4]=0; bez_pts[1][4]=0;
 				}
 				
 				
@@ -2987,7 +3034,10 @@ class GapBarrier
 				std::vector<double> opt_params1;
 				std::vector<double> opt_params2;
 				
-				opt_params1.push_back(num_obs+3); opt_params1.push_back(bez_ctrl_pts); opt_params1.push_back(bez_curv_pts); opt_params1.push_back(bez_alpha); opt_params1.push_back(bez_x1); opt_params1.push_back(bez_y2);
+				opt_params1.push_back(num_obs+7); opt_params1.push_back(bez_ctrl_pts); opt_params1.push_back(bez_curv_pts); opt_params1.push_back(bez_alpha); opt_params1.push_back(bez_x1); opt_params1.push_back(bez_y2);
+				//Leader reference control pts (only the last 3 pts since others are fixed for optimization)
+				opt_params1.push_back(bez_pts[0][2]); opt_params1.push_back(bez_pts[1][2]); opt_params1.push_back(bez_pts[0][3]); opt_params1.push_back(bez_pts[1][3]); opt_params1.push_back(bez_pts[0][4]); opt_params1.push_back(bez_pts[1][4]);
+				opt_params1.push_back(pursuit_weight); opt_params1.push_back(leader_detect); //For weighing objective terms
 
 				opt_params2.push_back(num_obs+7); opt_params2.push_back(bez_ctrl_pts); opt_params2.push_back(bez_curv_pts); opt_params2.push_back(bez_beta); opt_params2.push_back(bez_x1); opt_params2.push_back(bez_y2);
 				opt_params2.push_back(max_speed); opt_params2.push_back(min_speed); opt_params2.push_back(max_accel); opt_params2.push_back(max_steering_angle); opt_params2.push_back(std::abs(max_servo_speed*std::max(default_dt,dt)));
@@ -2999,7 +3049,7 @@ class GapBarrier
 					opt_params2.push_back(sub_bez_obs[i][0]);
 					opt_params2.push_back(sub_bez_obs[i][1]);
 				}
-				// printf("1: %d, %d 2: %d, %d\n",opt_params1.size(),2*(num_obs+3),opt_params2.size(),2*(num_obs+7));
+				// printf("1: %d, %d 2: %d, %d\n",opt_params1.size(),2*(num_obs+7),opt_params2.size(),2*(num_obs+7));
 
 				nlopt_set_min_objective(opt, myfunc, opt_params1.data());
 				double tol[9*bez_curv_pts]={1e-8};
