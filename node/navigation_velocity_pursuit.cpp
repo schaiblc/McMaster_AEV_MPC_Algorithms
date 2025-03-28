@@ -2768,13 +2768,15 @@ class GapBarrier
 				std::vector<double> wc = {0.0, 0.0};
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
-				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately 
-				for(int i=0; i<fused_ranges_MPC.size();i++){
-					double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
-					double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
-					
-					if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
-						fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately
+				if(leader_detect==1){
+					for(int i=0; i<fused_ranges_MPC.size();i++){
+						double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
+						double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
+						
+						if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
+							fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+						}
 					}
 				}
 
