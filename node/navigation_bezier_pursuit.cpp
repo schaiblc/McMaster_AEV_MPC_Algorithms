@@ -129,7 +129,9 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double x4_lead=xopt[0][5];
 	double y4_lead=xopt[1][5];
 	double pursuit_weight=xopt[0][6];
-	double leader_detect=xopt[1][6];
+	int leader_detect=xopt[1][6];
+
+	double base_pursue_w=1; //How to scale each term before applying the time-variant transistion scaling via pursuit_weight
 	
 	std::vector<std::vector<double>> bez_curv;
 	//Optimization variables:
@@ -167,17 +169,36 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			
 			// if(bez_alpha*dist2>100) continue; //Numerical error since too small so skip this obs
 			
-			funcreturn=funcreturn+(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
+			funcreturn=funcreturn+(1-pursuit_weight)*(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
 			//Next, find grad for each of five variables
 			if(grad){
-	/* x2 */ 	grad[0]=grad[0]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
-	/* x3 */ 	grad[1]=grad[1]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
-	/* y3 */ 	grad[2]=grad[2]-2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
-	/* x4 */ 	grad[3]=grad[3]-2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
-	/* y4 */ 	grad[4]=grad[4]-2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
+	/* x2 */ 	grad[0]=grad[0]-(1-pursuit_weight)*2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
+	/* x3 */ 	grad[1]=grad[1]-(1-pursuit_weight)*2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px3;
+	/* y3 */ 	grad[2]=grad[2]-(1-pursuit_weight)*2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py3;
+	/* x4 */ 	grad[3]=grad[3]-(1-pursuit_weight)*2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px4;
+	/* y4 */ 	grad[4]=grad[4]-(1-pursuit_weight)*2*(bez_curv[i][1]-xopt[1][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*py4;
 			}
 
 		}
+		
+	}
+
+	//Now, the pursuit terms for minimizing distance to the leader's bezier control points
+	if(leader_detect==1){
+		//For (x2,y2) where y2 is fixed
+		funcreturn=funcreturn+base_pursue_w*pursuit_weight*pow(x[0]-x2_lead,2);
+		grad[0]=grad[0]+base_pursue_w*pursuit_weight*2*(x[0]-x2_lead);
+		
+		//For (x3,y3)
+		funcreturn=funcreturn+base_pursue_w*pursuit_weight*(pow(x[1]-x3_lead,2)+pow(x[2]-y3_lead,2));
+		grad[1]=grad[1]+base_pursue_w*pursuit_weight*2*(x[1]-x3_lead);
+		grad[2]=grad[2]+base_pursue_w*pursuit_weight*2*(x[2]-y3_lead);
+		
+		//For (x4,y4)
+		funcreturn=funcreturn+base_pursue_w*pursuit_weight*(pow(x[3]-x4_lead,2)+pow(x[4]-y4_lead,2));
+		grad[3]=grad[3]+base_pursue_w*pursuit_weight*2*(x[3]-x4_lead);
+		grad[4]=grad[4]+base_pursue_w*pursuit_weight*2*(x[4]-y4_lead);
+		
 	}
 
 	return funcreturn;
@@ -492,6 +513,10 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	// 	}
 	// }
 
+}
+
+
+void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* my_func_data){ //Minimum leader distance inequality
 
 
 }
@@ -2573,12 +2598,14 @@ class GapBarrier
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
 				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately
-				for(int i=0; i<fused_ranges_MPC.size();i++){
-					double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
-					double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
-					
-					if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
-						fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+				if(leader_detect==1){
+					for(int i=0; i<fused_ranges_MPC.size();i++){
+						double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
+						double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
+						
+						if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
+							fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
+						}
 					}
 				}
 
@@ -2957,7 +2984,12 @@ class GapBarrier
 
 				//Find the desired bezier control points for the leader trajectory
 				double bez_pts[2][5];
-				double radius=std::abs(wheelbase/tan(car_detects[0].state[4]));
+				double turn_ang=0;
+				if(car_detects[0].state[4]<0){
+					turn_ang=std::min(-min_delta,car_detects[0].state[4]);
+				}
+				else turn_ang=std::max(min_delta,car_detects[0].state[4]);
+				double radius=std::abs(wheelbase/tan(turn_ang)); //Can't have div by 0 or inf radius
 				if(leader_detect==1){
 					double x_fin=radius*sin(bez_t_end*car_detects[0].state[3]/radius);
 					double y_fin=radius*(1.0-cos(bez_t_end*car_detects[0].state[3]/radius));
@@ -3033,11 +3065,18 @@ class GapBarrier
 
 				std::vector<double> opt_params1;
 				std::vector<double> opt_params2;
+				std::vector<double> opt_paramsp;
 				
 				opt_params1.push_back(num_obs+7); opt_params1.push_back(bez_ctrl_pts); opt_params1.push_back(bez_curv_pts); opt_params1.push_back(bez_alpha); opt_params1.push_back(bez_x1); opt_params1.push_back(bez_y2);
 				//Leader reference control pts (only the last 3 pts since others are fixed for optimization)
 				opt_params1.push_back(bez_pts[0][2]); opt_params1.push_back(bez_pts[1][2]); opt_params1.push_back(bez_pts[0][3]); opt_params1.push_back(bez_pts[1][3]); opt_params1.push_back(bez_pts[0][4]); opt_params1.push_back(bez_pts[1][4]);
-				opt_params1.push_back(pursuit_weight); opt_params1.push_back(leader_detect); //For weighing objective terms
+				if(leader_detect==1){ //Leader detected
+					opt_params1.push_back(pursuit_weight); 
+				}
+				else{ //No leader detected, pursuit weight is 0 for optimization purposes
+					opt_params1.push_back(0);	
+				}
+				opt_params1.push_back(leader_detect); //For weighing objective terms
 
 				opt_params2.push_back(num_obs+7); opt_params2.push_back(bez_ctrl_pts); opt_params2.push_back(bez_curv_pts); opt_params2.push_back(bez_beta); opt_params2.push_back(bez_x1); opt_params2.push_back(bez_y2);
 				opt_params2.push_back(max_speed); opt_params2.push_back(min_speed); opt_params2.push_back(max_accel); opt_params2.push_back(max_steering_angle); opt_params2.push_back(std::abs(max_servo_speed*std::max(default_dt,dt)));
@@ -3051,10 +3090,20 @@ class GapBarrier
 				}
 				// printf("1: %d, %d 2: %d, %d\n",opt_params1.size(),2*(num_obs+7),opt_params2.size(),2*(num_obs+7));
 
+				opt_paramsp.push_back(
+
+
+
+				
+
 				nlopt_set_min_objective(opt, myfunc, opt_params1.data());
 				double tol[9*bez_curv_pts]={1e-8};
+				double tolp[1]={1e-8};
 				
 				nlopt_add_inequality_mconstraint(opt, 9*bez_curv_pts, bezier_inequality_con, opt_params2.data(), tol);
+				if(leader_detect==1){
+					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_paramsp.data(), tolp);
+				}
 			
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
