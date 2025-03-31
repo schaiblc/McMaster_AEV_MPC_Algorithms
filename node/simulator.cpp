@@ -72,6 +72,8 @@ private:
     double width;
     double update_pose_rate=1;
 
+    double start_time=0;
+
     // A simulator of the laser
     ScanSimulator2D scan_simulator;
     double map_free_threshold;
@@ -159,7 +161,8 @@ public:
 
         // Initialize car state and driving commands
         state = {.x=0, .y=0, .theta=0, .velocity=0, .steer_angle=0.0, .angular_velocity=0.0, .slip_angle=0.0, .st_dyn=false};
-        state_det.x=2; state_det.y=-8; state_det.theta=M_PI/2;
+        state_det.x=2; state_det.y=-0.2; state_det.theta=0;
+        start_time=ros::Time::now().toSec();
         accel = 0.0;
         steer_angle_vel = 0.0;
         desired_speed = 0.0;
@@ -383,7 +386,12 @@ public:
 
         //Update state of vehicle detected and publish
         //////////////////////////////////////////////
-        state_det.y+=0.8*update_pose_rate;
+        double myvel=0.8;
+        state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
+        state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
+        if(ros::Time::now().toSec()>start_time+3){
+            state_det.theta-=0.01;
+        }
 
         pub_pose_det_transform(timestamp);
 
@@ -408,8 +416,9 @@ public:
 
             // Convert to float
             std::vector<float> scan_(scan.size());
-            for (size_t i = 0; i < scan.size(); i++)
+            for (size_t i = 0; i < scan.size(); i++){
                 scan_[i] = scan[i];
+            }
 
             // TTC Calculations are done here so the car can be halted in the simulator:
             // to reset TTC
@@ -451,7 +460,6 @@ public:
             scan_msg.intensities = scan_;
 
             scan_pub.publish(scan_msg);
-
 
             // Publish a transformation between base link and laser
             pub_laser_link_transform(timestamp);
