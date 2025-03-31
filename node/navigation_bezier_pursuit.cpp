@@ -550,7 +550,7 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		}
 	}
 
-	double px2=6*pow(1-t,2)*pow(t,2); double px3=4*(1-t)*pow(t,3); double py3=px3; double px4=pow(t,4); double py4=px4; //Partials of bezier x,y wrt ctrl pts
+	// double px2=6*pow(1-t,2)*pow(t,2); double px3=4*(1-t)*pow(t,3); double py3=px3; double px4=pow(t,4); double py4=px4; //Partials of bezier x,y wrt ctrl pts
 
 	//Find the distances between the sample bezier pts of our pursuit, leader and find gradients with partial of x,y wrt control points as above
 
@@ -2734,7 +2734,8 @@ class GapBarrier
 												double edge_x=detection_corners[q][0]+(detection_corners[(q+1)%4][0]-detection_corners[q][0])*c1/num_border;
 												double edge_y=detection_corners[q][1]+(detection_corners[(q+1)%4][1]-detection_corners[q][1])*c1/num_border;
 												double tfed_ang=atan2(edge_y,edge_x);
-												if (tfed_ang>M_PI) tfed_ang-=2*M_PI; if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
+												if (tfed_ang>M_PI) tfed_ang-=2*M_PI;
+												if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
 												lidar_transform_angles_veh_det.push_back(tfed_ang);
 												fused_ranges_MPC_veh_det.push_back(pow(pow(edge_x,2)+pow(edge_y,2),0.5));
 												// printf("%d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,theta_ref, xpt, ypt, track_x, track_y, track_theta, tfed_x, tfed_y);
@@ -3038,7 +3039,7 @@ class GapBarrier
 						ang_gap*=-1;
 					}
 					double uval_num=3*cos(ang_gap/2)*sin(ang_gap/2)-2*sin(ang_gap/2)+4*sqrt(2)*pow(sin(ang_gap/4),3);
-					double uval=uval_num/(2*pow(cos(ang_gap/2),2);
+					double uval=uval_num/(2*pow(cos(ang_gap/2),2));
 					double rval=8/3-5/3*cos(ang_gap/2)-4/3*uval*sin(ang_gap/2);
 						
 					bez_pts[0][0]=1; bez_pts[1][0]=0;
@@ -3193,6 +3194,8 @@ class GapBarrier
 					forcestop=0;
 				}
 
+				double min_dist1=100; //Min dist along trajectory, used for update pursuit weighting
+
 				if (optim < 0) {
 					safe_distance_adapt=safe_distance_adapt/2;
 					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
@@ -3245,7 +3248,6 @@ class GapBarrier
 
 
 					//Find minimum distance
-					double min_dist1=100;
 					for(int i=1; i<bez_curv_pts;i++){
 						t=double(i)/double(bez_curv_pts);
 						double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
@@ -3524,4 +3526,3 @@ int main(int argc, char **argv){
 		}
 
 }
-
