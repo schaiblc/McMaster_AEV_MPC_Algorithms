@@ -518,7 +518,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 
 void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* my_func_data){ //Minimum leader distance inequality
 	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
-	int cols = 6; //Constant amount of variables passed, only using leader, pursuit trajectories, no obstacles
+	int cols = 7; //Constant amount of variables passed, only using leader, pursuit trajectories, no obstacles
 	double xopt[2][cols]; //2D array of tracking lines appended to some certain variables
 	for (int i = 0; i < cols; i++) {
 		xopt[0][i] = raw_data[2*i];
@@ -531,12 +531,15 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 	double lead_vel=xopt[1][1]; //Leader's constant velocity over traj
 	double radius=xopt[0][2]; //Radius of circle arc of leader, + or - to account for delta + or -
 	double pursuit_weight=xopt[1][2]; //Weighting of pursuit term vs middle line MPC
-	int leader_detect=static_cast<int>(xopt[0][3]); //Whether leader is detected or not
+	int bez_curv_pts=static_cast<int>(xopt[0][3]); //Whether leader is detected or not
 	double step_time=xopt[1][3]; //Time of each callback or discrete step for our states
 	double min_pursue=xopt[0][4]; //Minimum distance allowed between pursuit and leader vehicle
 	double veh_det_length=xopt[1][4]; //Leader vehicle length, for constructing box around center point of vehicle
 	double veh_det_width=xopt[0][5]; //Leader vehicle width, for constructing box around center point of vehicle
 	double bez_beta=xopt[1][5]; //Soft min smoothing constant
+	double x1=xopt[0][6]; //Fixed x1 point for bezier control points
+	double y2=xopt[1][6]; //Fixed y2 point for bezier control points
+
 
 	if(result){
 		for(int i=0;i<m;i++){
@@ -550,14 +553,52 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		}
 	}
 
-	// double px2=6*pow(1-t,2)*pow(t,2); double px3=4*(1-t)*pow(t,3); double py3=px3; double px4=pow(t,4); double py4=px4; //Partials of bezier x,y wrt ctrl pts
+	//THIS PART IS BASED ON VELOCITY_OURSUIT, NEEDS TO BE FIXED AND UPDATED FOR BEZIER IMPLEMENTATION
+	//*********************************************************************************************
 
 	//Find the distances between the sample bezier pts of our pursuit, leader and find gradients with partial of x,y wrt control points as above
 
+	//Find softmin dist between follower, leader vehicles over all time steps in the trajectory & for the four corners of the vehicle box
+	//Each point along trajectory has four points, the gradient wrt x_i & y_i only involves numerator terms at that time step. Others wrt x_i, y_i = 0 so ignore
+	double sum_dist=0;
+	double curdist=0;
+	for(int i=0;i<bez_curv_pts;i++){ //Just one, big softmin distance constraint
+		double t=double(i)/double(bez_curv_pts);
+		double px2=6*pow(1-t,2)*pow(t,2); double px3=4*(1-t)*pow(t,3); double py3=px3; double px4=pow(t,4); double py4=px4; //Partials of bezier x,y wrt ctrl pts
 
+		double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*x[3];
+		double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
+		
+		double xl_og=radius*sin(lead_vel*step_time*i/radius);
+		double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
+		double xv_og=lead_vel*cos(lead_vel*step_time*i/radius);
+		double yv_og=lead_vel*sin(lead_vel*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
 
+		double x_lead=pursue_x+xl_og*cos(lead_theta)-yl_og*sin(lead_theta);
+		double y_lead=pursue_y+xl_og*sin(lead_theta)+yl_og*cos(lead_theta); //future leader pos in base_link frame (wrt our pursuit vehicle)
+		double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
+		double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link fram (wrt our pursuit vehicle)
+		
+		double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle for the four box corners
+		double lead_ptsx[4]; double lead_ptsy[4];
+		lead_ptsx[0]=x_lead+veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[0]=y_lead+veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
+		lead_ptsx[1]=x_lead+veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[1]=y_lead+veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
+		lead_ptsx[2]=x_lead-veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[2]=y_lead-veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
+		lead_ptsx[3]=x_lead-veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[3]=y_lead-veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
 
-	
+		//Sum distance for this point, find the numerator at least for this gradient wrt x_i & y_i
+		for(int j=0;j<4;j++){
+			curdist=sqrt(pow(x[2*nMPC*kMPC+i]-lead_ptsx[j],2)+pow(x[3*nMPC*kMPC+i]-lead_ptsy[j],2));
+			sum_dist+=exp(-vel_beta*curdist);
+			grad[2*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[2*nMPC*kMPC+i]-lead_ptsx[j])/curdist;
+			grad[3*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[3*nMPC*kMPC+i]-lead_ptsy[j])/curdist;
+		}	
+	}
+	for(int i=0;i<nMPC*kMPC;i++){
+		grad[2*nMPC*kMPC+i]=-grad[2*nMPC*kMPC+i]/result[0]; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
+		grad[3*nMPC*kMPC+i]=-grad[3*nMPC*kMPC+i]/result[0];
+	}
+	result[0]=1.0/double(vel_beta)*log(result[0])+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 
 }
 
@@ -3140,12 +3181,16 @@ class GapBarrier
 				else delta_lead=std::max(min_delta,car_detects[0].state[4]);
 				opt_paramsp.push_back(wheelbase/tan(delta_lead)); //Leader's circle arc (+ or -) radius, may need to use abs so we can use sign in some spots, abs radius other
 				opt_paramsp.push_back(pursuit_weight);
-				opt_paramsp.push_back(leader_detect);
+				opt_paramsp.push_back(bez_curv_pts);
 				opt_paramsp.push_back(std::max(default_dt,dt)); //Time between discrete states, to convert the circle arc with vel of leader to discrete steps
 				opt_paramsp.push_back(min_pursue); //Minimum distance allowed between pursuit and leader vehicle
 				opt_paramsp.push_back(veh_det_length); //Leader vehicle length, for constructing box around center point of vehicle
 				opt_paramsp.push_back(veh_det_width); //Leader vehicle width, for constructing box around center point of vehicle
 				opt_paramsp.push_back(bez_beta);
+				opt_paramsp.push_back(bez_x1);
+				opt_paramsp.push_back(bez_y2);
+				
+				
 
 
 
