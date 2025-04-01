@@ -647,10 +647,10 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		}	
 	}
 	for(int i=0;i<nMPC*kMPC;i++){
-		grad[2*nMPC*kMPC+i]=-grad[2*nMPC*kMPC+i]/result[0]; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
-		grad[3*nMPC*kMPC+i]=-grad[3*nMPC*kMPC+i]/result[0];
+		grad[2*nMPC*kMPC+i]=-grad[2*nMPC*kMPC+i]/sum_dist; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
+		grad[3*nMPC*kMPC+i]=-grad[3*nMPC*kMPC+i]/sum_dist;
 	}
-	result[0]=1.0/double(vel_beta)*log(result[0])+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
+	result[0]=1.0/double(vel_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 
 }
 
