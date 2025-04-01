@@ -3378,6 +3378,20 @@ class GapBarrier
 					vel_vehicle[i]=max_speed/2;
 				}
 
+				//For pursuit method, we now modify our starting guess to incorporate some dependency on a "good" pursuit path as well, weighted by pursuit_weight
+				//Find a pursuit path then average the x, y of this and our OG MPC paths to get the x & y of the starting guess
+				//Then, calculate the delta and vs from these but restrict them based on the physical limits of change and max/min
+				double deltasp[nMPC*kMPC]; double thetasp[nMPC*kMPC]; double x_vehiclep[nMPC*kMPC]; double y_vehiclep[nMPC*kMPC]; double vel_vehiclep[nMPC*kMPC];
+				memcpy(vel_vehiclep, vel_vehicle, sizeof(vel_vehicle));
+				x_vehiclep[0]=0; y_vehiclep[0]=0; thetasp[0]=0;
+				//Look at the current angle between us and the leader trajectory point at each interval, take the delta to push theta towards this value
+				for(int i=0; i<nMPC*kMPC; i++){
+					double theta_to_lead=atan2(,);
+					
+					//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
+
+				}
+
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
 					x[i]=thetas[i];
 					x[i+nMPC*kMPC]=deltas[i];
