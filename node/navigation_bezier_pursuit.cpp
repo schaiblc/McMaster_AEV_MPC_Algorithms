@@ -553,7 +553,7 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		}
 	}
 
-	//THIS PART IS BASED ON VELOCITY_OURSUIT, NEEDS TO BE FIXED AND UPDATED FOR BEZIER IMPLEMENTATION
+	//THIS PART IS BASED ON VELOCITY_PURSUIT, NEEDS TO BE FIXED AND UPDATED FOR BEZIER IMPLEMENTATION
 	//*********************************************************************************************
 
 	//Find the distances between the sample bezier pts of our pursuit, leader and find gradients with partial of x,y wrt control points as above
