@@ -3267,7 +3267,8 @@ class GapBarrier
 					double delta_lead=0;
 					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
 					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
-					opt_params_pursuit.push_back(wheelbase/tan(delta_lead)); //Leader's circle arc (+ or -) radius, may need to use abs so we can use sign in some spots, abs radius other
+					double radius=wheelbase/tan(delta_lead);
+					opt_params_pursuit.push_back(radius); //Leader's circle arc (+ or -) radius, may need to use abs so we can use sign in some spots, abs radius other
 					opt_params_pursuit.push_back(pursuit_weight);
 				}
 				else{ //If no detection, do original MPC but still update the pursuit_weight in case we re-detect
@@ -3381,15 +3382,38 @@ class GapBarrier
 				//For pursuit method, we now modify our starting guess to incorporate some dependency on a "good" pursuit path as well, weighted by pursuit_weight
 				//Find a pursuit path then average the x, y of this and our OG MPC paths to get the x & y of the starting guess
 				//Then, calculate the delta and vs from these but restrict them based on the physical limits of change and max/min
-				double deltasp[nMPC*kMPC]; double thetasp[nMPC*kMPC]; double x_vehiclep[nMPC*kMPC]; double y_vehiclep[nMPC*kMPC]; double vel_vehiclep[nMPC*kMPC];
-				memcpy(vel_vehiclep, vel_vehicle, sizeof(vel_vehicle));
-				x_vehiclep[0]=0; y_vehiclep[0]=0; thetasp[0]=0;
-				//Look at the current angle between us and the leader trajectory point at each interval, take the delta to push theta towards this value
-				for(int i=0; i<nMPC*kMPC; i++){
-					double theta_to_lead=atan2(,);
-					
-					//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
+				if(leader_detect==1){
+					double deltasp[nMPC*kMPC]; double thetasp[nMPC*kMPC]; double x_vehiclep[nMPC*kMPC]; double y_vehiclep[nMPC*kMPC]; double vel_vehiclep[nMPC*kMPC];
+					memcpy(vel_vehiclep, vel_vehicle, sizeof(vel_vehicle));
+					x_vehiclep[0]=0; y_vehiclep[0]=0; thetasp[0]=0;
+					//Look at the current angle between us and the leader trajectory point at each interval, take the delta to push theta towards this value
+					for(int i=0; i<nMPC*kMPC; i++){
+						double xl_og=radius*sin(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius);
+						double yl_og=radius*(1-cos(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius)); //xlead, ylead before accoutning for theta rot
+						
+						double x_lead=car_detects[0].state[0]+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
+						double y_lead=car_detects[0].state[1]+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); //future leader pos in base_link frame (wrt our pursuit vehicle)
+	
+						
+						double theta_to_lead=atan2(y_lead-y_vehiclep[i],x_lead-x_vehiclep[i]);
+						while(theta_to_lead>thetasp[i]+M_PI) theta_to_lead-=2*M_PI;
+						while(theta_to_lead<thetasp[i]-M_PI) theta_to_lead+=2*M_PI;
+						if(theta_to_lead>thetasp[i]){
 
+						}
+						else if(theta_to_lead<thetasp[i]){
+
+						}
+						else{
+							deltasp[i]=0;
+						}
+						
+
+						
+						
+						//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
+	
+					}
 				}
 
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
