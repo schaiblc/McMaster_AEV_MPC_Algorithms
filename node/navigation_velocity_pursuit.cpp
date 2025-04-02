@@ -3399,21 +3399,62 @@ class GapBarrier
 						while(theta_to_lead>thetasp[i]+M_PI) theta_to_lead-=2*M_PI;
 						while(theta_to_lead<thetasp[i]-M_PI) theta_to_lead+=2*M_PI;
 						if(theta_to_lead>thetasp[i]){
-
+							if(i==0) deltasp[i]=std::min(last_delta+opt_params[2],max_steering_angle);
+							else deltasp[i]=std::min(deltasp[i-1]+opt_params[2],max_steering_angle);
 						}
 						else if(theta_to_lead<thetasp[i]){
-
+							if(i=0) deltasp[i]=std::max(last_delta-opt_params[2],-max_steering_angle);
+							else deltasp[i]=std::max(deltasp[i-1]-opt_params[2],-max_steering_angle);
 						}
 						else{
 							deltasp[i]=0;
 						}
-						
 
+						if(i<nMPC*kMPC-1){
+							x_vehiclep[i+1]=x_vehiclep[i]+opt_params[0]*vel_vehiclep[i]*cos(thetasp[i]);
+							y_vehiclep[i+1]=y_vehiclep[i]+opt_params[0]*vel_vehiclep[i]*sin(thetasp[i]);
+							thetasp[i+1]=thetasp[i]+opt_params[0]*vel_vehiclep[i]/opt_params[1]*tan(deltasp[i]);
+						}
 						
 						
-						//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
-	
 					}
+					//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
+					double x_veh_av[nMPC*kMPC]; double y_veh_av[nMPC*kMPC]; double thet_veh_av[nMPC*kMPC];
+					x_veh_av[0]=0; y_veh_av[0]=0; thet_veh_av[0]=0;
+					for(int i=1; i<nMPC*kMPC; i++){ //Now, we find the average x & y points based on pursuit_weight
+						x_veh_av[i]=(1-pursuit_weight)*x_vehicle[i]+pursuit_weight*x_vehiclep[i];
+						y_veh_av[i]=(1-pursuit_weight)*y_vehicle[i]+pursuit_weight*y_vehiclep[i];
+						thet_veh_av[i-1]=atan2(y_veh_av[i]-y_veh_av[i-1],x_veh_av[i]-x_veh_av[i-1]);
+						if(i>1){
+							while(thet_veh_av[i-1]>thet_veh_av[i-2]+M_PI) thet_veh_av[i-1]-=2*M_PI;
+							while(thet_veh_av[i-1]<thet_veh_av[i-2]-M_PI) thet_veh_av[i-1]+=2*M_PI;
+						}
+					}
+					double delta_act[nMPC*kMPC]; double vel_act[nMPC*kMPC];
+					for(int i=0;i<nMPC*kMPC-1; i++){
+						vel_act[i]=sqrt(pow(x_veh_av[i+1]-x_veh_av[i],2)+pow(y_veh_av[i+1]-y_veh_av[i],2));
+						vel_act[i]=std::max(min_speed,vel_act[i],1e-2);
+						delta_act[i]=atan(wheelbase/vel_act[i]*(theta_veh_av[i+1]-theta_veh_av[i]));
+						if(i>0){
+							if(delta_act[i]>delta_act[i-1]){
+								delta_act[i]=std::min(delta_act[i],delta_act[i-1]+opt_params[2],max_steering_angle);
+							}
+							else{
+								delta_act[i]=std::max(delta_act[i],delta_act[i-1]-opt_params[2],-max_steering_angle);
+							}
+						}
+						else{
+							if(delta_act[i]>last_delta){
+								delta_act[i]=std::min(delta_act[i],last_delta+opt_params[2],max_steering_angle);	
+							}
+							else{
+								delta_act[i]=std::max(delta_act[i],last_delta-opt_params[2],-max_steering_angle);
+							}
+						}		
+					}
+					//NOW GET THE X, Y AND THETA FROM THE DELTA_ACT AND VEL_ACT
+					
+					
 				}
 
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
