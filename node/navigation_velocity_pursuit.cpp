@@ -3452,9 +3452,18 @@ class GapBarrier
 							}
 						}		
 					}
+					vel_act[nMPC*kMPC-1]=vel_act[nMPC*kMPC-2];
+					delta_act[nMPC*kMPC-1]=delta_act[nMPC*kMPC-2];
+					memcpy(vel_vehicle, vel_act, sizeof(vel_act));
+					memcpy(deltas, delta_act, sizeof(delta_act));
+					
 					//NOW GET THE X, Y AND THETA FROM THE DELTA_ACT AND VEL_ACT
-					
-					
+					for(int i=1;i<nMPC*kMPC;i++){
+						x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
+						y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
+						thetas[i]=thetas[i-1]+opt_params[0]*vel_vehicle[i-1]/opt_params[1]*tan(deltas[i-1]);
+					}
+					//These are our new, pursuit weighted starting guess values used below
 				}
 
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
