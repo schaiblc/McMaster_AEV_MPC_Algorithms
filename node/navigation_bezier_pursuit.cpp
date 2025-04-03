@@ -3222,6 +3222,15 @@ class GapBarrier
 				x[4]=yptplot[1]; //y4
 				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
 
+				if(leader_detect==1){ //Weighted starting guess, trying to copy the puruit control points to follow trajectory
+					x[0]=(1-pursuit_weight)*x[0]+pursuit_weight*bez_pts[0][2];
+					x[1]=(1-pursuit_weight)*x[1]+pursuit_weight*bez_pts[0][3];
+					x[2]=(1-pursuit_weight)*x[2]+pursuit_weight*bez_pts[1][3];
+					x[3]=(1-pursuit_weight)*x[3]+pursuit_weight*bez_pts[0][4];
+					x[4]=(1-pursuit_weight)*x[4]+pursuit_weight*bez_pts[1][4];
+					
+				}
+
 				int successful_opt=0;
 
 				double minf; /* `*`the` `minimum` `objective` `value,` `upon` `return`*` */
