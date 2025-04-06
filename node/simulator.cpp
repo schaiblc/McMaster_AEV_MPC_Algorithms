@@ -141,6 +141,8 @@ private:
     // precompute distance from lidar to edge of car for each beam
     std::vector<double> car_distances;
 
+    double lidar_call=0;
+
     // for collision check
     bool TTC = false;
     double ttc_threshold;
@@ -361,30 +363,14 @@ public:
         // Update the pose
         ros::Time timestamp = ros::Time::now();
         double current_seconds = timestamp.toSec();
-        double stable_dt=0.01;
-        if(current_seconds - previous_seconds<=stable_dt){
-            state = STKinematics::update(
-                state,
-                accel,
-                steer_angle_vel,
-                params,
-                current_seconds - previous_seconds);
-        }
-        else{ //This ensures numerical stability for the update pose but since we use update_pose_rate for our own lidar callback, 100 ms is good for LIDAR but too big here. This fixes that
-            double timetime=0;
-            while(timetime<current_seconds - previous_seconds){
-                double steptime=std::min(stable_dt,current_seconds - previous_seconds-timetime);
-                state = STKinematics::update(
-                    state,
-                    accel,
-                    steer_angle_vel,
-                    params,
-                    steptime);
-                timetime+=steptime;
-            }
 
-        }
-
+        state = STKinematics::update(
+            state,
+            accel,
+            steer_angle_vel,
+            params,
+            current_seconds - previous_seconds);
+                
 
 
         state.velocity = std::min(std::max(state.velocity, -max_speed), max_speed);
@@ -410,7 +396,7 @@ public:
         state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
         state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
         if(ros::Time::now().toSec()>start_time+3){
-            state_det.theta-=0.01;
+            state_det.theta-=0.2*update_pose_rate;
         }
         
         pub_pose_det_transform(timestamp);
@@ -423,7 +409,12 @@ public:
 
         /// KEEP in sim
         // If we have a map, perform a scan
-        if (map_exists) {
+        lidar_call++; //This is hard-coded to ensure LIDAR callback frequency is 10 Hz
+        if(update_pose_rate!=0.01){
+            ROS_INFO("Set update_pose_rate to 0.01 to ensure smooth pose update and fixed LIDAR callback fo 10 Hz");
+        }
+        if (map_exists && lidar_call==10) {
+            lidar_call=0;
             // Get the pose of the lidar, given the pose of base link
             // (base link is the center of the rear axle)
             Pose2D scan_pose;
