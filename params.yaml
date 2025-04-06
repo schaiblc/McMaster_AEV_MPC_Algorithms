@@ -24,7 +24,7 @@ mass: 3.47 # kg (measured on car 'lidart')
 moment_inertia: .04712 # kg m^2 (estimated as a rectangle with width and height of car and evenly distributed mass, then shifted to account for center of mass location)
 
 # The rate at which the pose and the lidar publish
-update_pose_rate: 0.02 #Changed from 0.02 in order to reduce oscillation, MPC will now better keep up with vehicle in simulation
+update_pose_rate: 0.01 #This is for smooth pose_update, LIDAR CALLBACK for simulator is fixed at 10 Hz however (after every 10 updates)
 
 # Camera parameters
 min_cv_range: 0.3 # meters
