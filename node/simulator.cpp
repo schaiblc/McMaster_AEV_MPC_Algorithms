@@ -361,15 +361,35 @@ public:
         // Update the pose
         ros::Time timestamp = ros::Time::now();
         double current_seconds = timestamp.toSec();
-        state = STKinematics::update(
-            state,
-            accel,
-            steer_angle_vel,
-            params,
-            current_seconds - previous_seconds);
+        double stable_dt=0.01;
+        if(current_seconds - previous_seconds<=stable_dt){
+            state = STKinematics::update(
+                state,
+                accel,
+                steer_angle_vel,
+                params,
+                current_seconds - previous_seconds);
+        }
+        else{ //This ensures numerical stability for the update pose but since we use update_pose_rate for our own lidar callback, 100 ms is good for LIDAR but too big here. This fixes that
+            double timetime=0;
+            while(timetime<current_seconds - previous_seconds){
+                double steptime=std::min(stable_dt,current_seconds - previous_seconds-timetime);
+                state = STKinematics::update(
+                    state,
+                    accel,
+                    steer_angle_vel,
+                    params,
+                    steptime);
+                timetime+=steptime;
+            }
+
+        }
+
+
+
         state.velocity = std::min(std::max(state.velocity, -max_speed), max_speed);
         state.steer_angle = std::min(std::max(state.steer_angle, -max_steering_angle), max_steering_angle);
-
+        
         previous_seconds = current_seconds;
 
         /// Publish the pose as a transformation
@@ -392,7 +412,7 @@ public:
         if(ros::Time::now().toSec()>start_time+3){
             state_det.theta-=0.01;
         }
-
+        
         pub_pose_det_transform(timestamp);
 
 
