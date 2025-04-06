@@ -187,17 +187,22 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	if(leader_detect==1){
 		//For (x2,y2) where y2 is fixed
 		funcreturn=funcreturn+base_pursue_w*pursuit_weight*pow(x[0]-x2_lead,2);
-		grad[0]=grad[0]+base_pursue_w*pursuit_weight*2*(x[0]-x2_lead);
-		
+		if(grad){
+			grad[0]=grad[0]+base_pursue_w*pursuit_weight*2*(x[0]-x2_lead);
+		}
 		//For (x3,y3)
 		funcreturn=funcreturn+base_pursue_w*pursuit_weight*(pow(x[1]-x3_lead,2)+pow(x[2]-y3_lead,2));
-		grad[1]=grad[1]+base_pursue_w*pursuit_weight*2*(x[1]-x3_lead);
-		grad[2]=grad[2]+base_pursue_w*pursuit_weight*2*(x[2]-y3_lead);
+		if(grad){
+			grad[1]=grad[1]+base_pursue_w*pursuit_weight*2*(x[1]-x3_lead);
+			grad[2]=grad[2]+base_pursue_w*pursuit_weight*2*(x[2]-y3_lead);
+		}
 		
 		//For (x4,y4)
 		funcreturn=funcreturn+base_pursue_w*pursuit_weight*(pow(x[3]-x4_lead,2)+pow(x[4]-y4_lead,2));
-		grad[3]=grad[3]+base_pursue_w*pursuit_weight*2*(x[3]-x4_lead);
-		grad[4]=grad[4]+base_pursue_w*pursuit_weight*2*(x[4]-y4_lead);
+		if(grad){
+			grad[3]=grad[3]+base_pursue_w*pursuit_weight*2*(x[3]-x4_lead);
+			grad[4]=grad[4]+base_pursue_w*pursuit_weight*2*(x[4]-y4_lead);
+		}
 		
 	}
 
@@ -589,12 +594,12 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		//Sum distance for this point, find the numerator at least for this gradient wrt x_i & y_i
 		for(int j=0;j<4;j++){
 			curdist=sqrt(pow(bez_x-lead_ptsx[j],2)+pow(bez_y-lead_ptsy[j],2));
-			sum_dist+=exp(-vel_beta*curdist);
-			grad[0]=exp(-vel_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
-			grad[1]=exp(-vel_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
-			grad[2]=exp(-vel_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
-			grad[3]=exp(-vel_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
-			grad[4]=exp(-vel_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
+			sum_dist+=exp(-bez_beta*curdist);
+			grad[0]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
+			grad[1]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
+			grad[2]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
+			grad[3]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
+			grad[4]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
 		}	
 	}
 	for(int i=0;i<nMPC*kMPC;i++){
@@ -604,7 +609,7 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		grad[3]=-grad[3]/sum_dist;
 		grad[4]=-grad[4]/sum_dist;
 	}
-	result[0]=1.0/double(vel_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
+	result[0]=1.0/double(bez_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 
 }
 
