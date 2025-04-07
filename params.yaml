@@ -267,8 +267,9 @@ pursuit_dist: 1 #Max ddistance, above which we prioritize pursuit
 transit_rate: 0.05 #Transition rate, how fast to switch sweightings on each mode
 min_pursue: 0.7 #Min distance allowed to the leader
 min_delta: 0.002 #Minimum delta, to ensure our circle arc radius doesn't become 1/0 (undefined)
-pursuit_x: 1.1 #The trajectory at which we want to maintain psoition from leader, here we want leader 1.1 m ahead in x
-pursuit_y: 0.1 #And 0.1 m ahead in +y
+pursuit_x: 2.1 #The trajectory at which we want to maintain psoition from leader, here we want leader 1.1 m ahead in x
+pursuit_y: -0.6 #And 0.1 m ahead in +y
+pursuit_beta: 80 #Smoothing factor for min_dist to leader
 
 
 # Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
