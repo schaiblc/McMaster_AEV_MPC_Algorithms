@@ -141,8 +141,9 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double d_dot_factor=30;
 	double delta_factor=0.1;
 	double vel_factor=0.1; //Scale importance of velocity term (constant v for no leader detection; min diff between ours, lead vel for OG MPC if detected; no term if pursuit)
-	double d_pursuit_factor=1;
+	double d_pursuit_factor=10;
 	double d_dot_pursuit_factor=1; //These are to scale base weightings wrt each other, when pursuit weight changes, will further change weighting distribution
+	
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
@@ -251,7 +252,6 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			}
 		}
 	}
-	
 	return funcreturn;
 }
 
@@ -635,6 +635,7 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 	//Each point along trajectory has four points, the gradient wrt x_i & y_i only involves numerator terms at that time step. Others wrt x_i, y_i = 0 so ignore
 	double sum_dist=0;
 	double curdist=0;
+	double mindist=100;
 	for(int i=0;i<nMPC*kMPC;i++){ //Just one, big softmin distance constraint
 		double xl_og=radius*sin(lead_vel*step_time*i/radius);
 		double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
@@ -652,16 +653,23 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		lead_ptsx[1]=x_lead+veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[1]=y_lead+veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
 		lead_ptsx[2]=x_lead-veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[2]=y_lead-veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
 		lead_ptsx[3]=x_lead-veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[3]=y_lead-veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
-
 		//Sum distance for this point, find the numerator at least for this gradient wrt x_i & y_i
 		for(int j=0;j<4;j++){
 			curdist=sqrt(pow(x[2*nMPC*kMPC+i]-lead_ptsx[j],2)+pow(x[3*nMPC*kMPC+i]-lead_ptsy[j],2));
 			sum_dist+=exp(-vel_beta*curdist);
+
+			if(curdist<mindist){
+				mindist=curdist;
+			}
+			// if(curdist<0.1){
+			// 	ROS_ERROR("%d, %d, %lf, %lf -- %lf %lf | %lf\n",i,j,x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],lead_ptsx[j],lead_ptsy[j],curdist);
+			// }
 			if(grad){
 				grad[2*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[2*nMPC*kMPC+i]-lead_ptsx[j])/curdist;
 				grad[3*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[3*nMPC*kMPC+i]-lead_ptsy[j])/curdist;
 			}
 		}	
+		// printf("%d %lf, %lf - - -%lf, %lf | %lf\n",i,x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],x_lead,y_lead,curdist);
 	}
 	for(int i=0;i<nMPC*kMPC;i++){
 		if(grad){
@@ -670,7 +678,8 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		}
 	}
 	result[0]=1.0/double(vel_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
-
+	
+	// printf("PURSUITDIST %lf %lf %lf\n",1.0/double(vel_beta)*log(sum_dist),min_pursue,mindist);
 }
 
 
@@ -787,6 +796,7 @@ class GapBarrier
 		double max_speed=0;
 		double max_accel=0; //Max decel is set to equal
 		double vel_beta=0;
+		double pursuit_beta=0;
 		double theta_band_smooth=0;
 		double theta_band_diff=0;
 
@@ -981,6 +991,7 @@ class GapBarrier
 			nf.getParam("min_speed",min_speed);
 			nf.getParam("max_accel",max_accel); //Max decel set to equal
 			nf.getParam("bez_beta",vel_beta);
+			nf.getParam("pursuit_beta",pursuit_beta);
 			nf.getParam("theta_band_smooth",theta_band_smooth);
 			nf.getParam("theta_band_diff",theta_band_diff);
 			nf.getParam("obs_sep",obs_sep);
@@ -3311,13 +3322,14 @@ class GapBarrier
 				opt_params_pursuit.push_back(min_pursue); //Minimum distance allowed between pursuit and leader vehicle
 				opt_params_pursuit.push_back(veh_det_length); //Leader vehicle length, for constructing box around center point of vehicle
 				opt_params_pursuit.push_back(veh_det_width); //Leader vehicle width, for constructing box around center point of vehicle
-				opt_params_pursuit.push_back(vel_beta);
+				opt_params_pursuit.push_back(pursuit_beta);
 				opt_params_pursuit.push_back(0);
 				for(int i=0; i<nMPC*kMPC;i++){
 					opt_params_pursuit.push_back(track_line[0][i]);
 					opt_params_pursuit.push_back(track_line[1][i]);
 				}
 
+				std::vector<double> opt_params_pursuit1=opt_params_pursuit;
 
 			
 				nlopt_set_min_objective(opt, myfunc, opt_params_pursuit.data());
@@ -3354,8 +3366,15 @@ class GapBarrier
 				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC+1, delta_inequality_con, &opt_params, tol1);
 				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
 				if(leader_detect==1){
-					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_params_pursuit.data(), tolp);
+					opt_params_pursuit1[1]=(car_detects[0].state[0]); //Our target to follow trajectory in X
+					opt_params_pursuit1[2]=(car_detects[0].state[1]); //And Y (This is the starting point of the leader, not the desired pursuit trajectory as used in objective)
+					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_params_pursuit1.data(), tolp);
 				}
+
+				//Next, test in different scenarios, tweak parameters in opt for balancing d, d_dot, OG MPC, pursuit, etc
+				//Sometimes the opt path goes way off. See why even in steady pursuit
+				//Lastly, need to rethink the pursuit path we use for start guess, opt function
+				//The one we use assumes constant lag behind original leader pose but this offset changes in x, y as the leader makes rotated path...
 
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
@@ -3411,7 +3430,7 @@ class GapBarrier
 				if(leader_detect==1){
 					double deltasp[nMPC*kMPC]; double thetasp[nMPC*kMPC]; double x_vehiclep[nMPC*kMPC]; double y_vehiclep[nMPC*kMPC]; double vel_vehiclep[nMPC*kMPC];
 					for(int i=0;i<nMPC*kMPC;i++){
-						vel_vehiclep[i]=vel_vehicle[i];
+						vel_vehiclep[i]=car_detects[0].state[3];
 					}
 					x_vehiclep[0]=0; y_vehiclep[0]=0; thetasp[0]=0;
 					//Look at the current angle between us and the leader trajectory point at each interval, take the delta to push theta towards this value
@@ -3419,7 +3438,7 @@ class GapBarrier
 					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
 					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
 					double radius=wheelbase/tan(delta_lead);
-					
+					double close_track=0;
 					for(int i=0; i<nMPC*kMPC; i++){
 						double xl_og=radius*sin(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius);
 						double yl_og=radius*(1-cos(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius)); //xlead, ylead before accoutning for theta rot
@@ -3427,12 +3446,18 @@ class GapBarrier
 						double x_lead=car_detects[0].state[0]-(pursuit_x*cos(car_detects[0].state[2])-pursuit_y*sin(car_detects[0].state[2]))+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
 						double y_lead=car_detects[0].state[1]-(pursuit_x*sin(car_detects[0].state[2])+pursuit_y*cos(car_detects[0].state[2]))+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); //future leader pos in base_link frame (wrt our pursuit vehicle)
 
-						
+						if(i==0 && sqrt(pow(x_lead-x_vehiclep[i],2)+pow(y_lead-y_vehiclep[i],2))<0.5){ //Close enough, just use the leader's steering angle as starting guess
+							close_track=1;
+						}
+
 						double theta_to_lead=atan2(y_lead-y_vehiclep[i],x_lead-x_vehiclep[i]);
 						
 						while(theta_to_lead>thetasp[i]+M_PI) theta_to_lead-=2*M_PI;
 						while(theta_to_lead<thetasp[i]-M_PI) theta_to_lead+=2*M_PI;
 						double ex_delta=atan((theta_to_lead-thetasp[i])*opt_params[1]/opt_params[0]/vel_vehiclep[i]);
+						if(close_track==1){
+							ex_delta=car_detects[0].state[4];
+						}
 						if(theta_to_lead>thetasp[i]){
 							if(i==0) deltasp[i]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
 							else deltasp[i]=std::min(ex_delta,std::min(deltasp[i-1]+opt_params[2],max_steering_angle));
@@ -3883,7 +3908,6 @@ class GapBarrier
 						double x_lead=car_detects[0].state[0]-(pursuit_x*cos(car_detects[0].state[2])-pursuit_y*sin(car_detects[0].state[2]))+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
 						double y_lead=car_detects[0].state[1]-(pursuit_x*sin(car_detects[0].state[2])+pursuit_y*cos(car_detects[0].state[2]))+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); 
 						//future leader pos in base_link frame (wrt our pursuit vehicle)
-						printf("LEAD %d, %lf, %lf\n",i,x_lead,y_lead);
 						p3b.x = x_lead;	p3b.y = y_lead;	p3b.z = 0;
 						pursuit_marker.points.push_back(p3b);	
 					}
