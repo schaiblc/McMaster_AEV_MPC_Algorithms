@@ -393,10 +393,15 @@ public:
         //Update state of vehicle detected and publish
         //////////////////////////////////////////////
         double myvel=0.8;
-        state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
-        state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
-        if(ros::Time::now().toSec()>start_time+3){
-            state_det.theta-=0.2*update_pose_rate;
+        if(ros::Time::now().toSec()<start_time+60){
+            state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
+            state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
+            if(ros::Time::now().toSec()>start_time+3 && ros::Time::now().toSec()<start_time+10){
+                state_det.theta-=0.2*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+10 && ros::Time::now().toSec()<start_time+24){
+                state_det.theta+=0.2*update_pose_rate;
+            }
         }
         
         pub_pose_det_transform(timestamp);
