@@ -212,7 +212,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 
 			//Find the current heading of the vehicle to get the correct lagging pursuit x & y in base_link
 			double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
-			double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link fram (wrt our pursuit vehicle)
+			double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link frame (wrt our pursuit vehicle)
 
 			double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle		
 
