@@ -35,6 +35,9 @@
 #include <tf/tf.h>
 #include <iostream>
 #include <math.h>
+#include <utility>
+#include <fstream>
+#include <vector>
 
 
 
@@ -124,6 +127,12 @@ private:
     int map_width, map_height;
     double map_resolution, origin_x, origin_y;
 
+
+    std::vector<std::pair<double, double>> MPC_track;
+
+    int maxIndex = 0;
+    int indx=0;
+
     // safety margin for collisions
     double thresh;
     double speed_clip_diff;
@@ -170,6 +179,17 @@ public:
         desired_speed = 0.0;
         desired_steer_ang = 0.0;
         previous_seconds = ros::Time::now().toSec();
+
+        std::ifstream infile("/home/gjsk/berlin_MPC_clean.txt");  // Open the file
+        
+        double a, b;
+        while (infile >> a >> b) {
+            MPC_track.emplace_back(a, b);
+        }
+
+        infile.close();
+
+        maxIndex = MPC_track.size() - 1;
 
         // Get the topic names
         std::string drive_topic, map_topic, scan_topic, pose_topic, gt_pose_topic, explore_topic, 
@@ -393,15 +413,42 @@ public:
         //Update state of vehicle detected and publish
         //////////////////////////////////////////////
         double myvel=0.8;
-        if(ros::Time::now().toSec()<start_time+60){
+        double timeoffset=0;
+        //Path to pursue for the berlin.yaml environment
+        // if(indx<=maxIndex){
+        //     state_det.x=MPC_track[indx].first;
+        //     state_det.y=MPC_track[indx].second;
+        //     state_det.theta=0;
+
+        // }
+        if(ros::Time::now().toSec()<start_time+60+timeoffset && ros::Time::now().toSec()>start_time+timeoffset){
             state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
             state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
-            if(ros::Time::now().toSec()>start_time+3 && ros::Time::now().toSec()<start_time+10){
+            if(ros::Time::now().toSec()>start_time+3+timeoffset && ros::Time::now().toSec()<start_time+10+timeoffset){
                 state_det.theta-=0.2*update_pose_rate;
             }
-            if(ros::Time::now().toSec()>start_time+10 && ros::Time::now().toSec()<start_time+24){
+            if(ros::Time::now().toSec()>start_time+10+timeoffset && ros::Time::now().toSec()<start_time+12+timeoffset){
                 state_det.theta+=0.2*update_pose_rate;
             }
+            if(ros::Time::now().toSec()>start_time+12+timeoffset && ros::Time::now().toSec()<start_time+16+timeoffset){
+                state_det.theta-=0.3*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+16+timeoffset && ros::Time::now().toSec()<start_time+20+timeoffset){
+                state_det.theta+=0.1*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+26+timeoffset && ros::Time::now().toSec()<start_time+30+timeoffset){
+                state_det.theta+=0.1*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+32+timeoffset && ros::Time::now().toSec()<start_time+35+timeoffset){
+                state_det.theta-=0.2*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+35+timeoffset && ros::Time::now().toSec()<start_time+42+timeoffset){
+                state_det.theta-=0.4*update_pose_rate;
+            }
+            if(ros::Time::now().toSec()>start_time+42+timeoffset && ros::Time::now().toSec()<start_time+42.5+timeoffset){
+                state_det.theta+=0.2*update_pose_rate;
+            }
+
         }
         
         pub_pose_det_transform(timestamp);
@@ -420,6 +467,7 @@ public:
         }
         if (map_exists && lidar_call==10) {
             lidar_call=0;
+            indx++;
             // Get the pose of the lidar, given the pose of base link
             // (base link is the center of the rear axle)
             Pose2D scan_pose;
