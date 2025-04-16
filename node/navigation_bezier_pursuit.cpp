@@ -106,6 +106,8 @@ struct vehicle_detection
 
 };
 
+int nanflag=0;
+
 
 double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //NLOPT cost function
 {
@@ -140,13 +142,23 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	//[2] -> y3
 	//[3] -> x4
 	//[4] -> y4
+	if(nanflag==1){
+		return 0;
+	}
 
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
 		double t=double(i)/double(bez_curv_pts-1);
 		double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*x[3];
 		double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
+		if(nanflag==0 && std::isnan(bez_x)){
+			nanflag=1;
+			ROS_ERROR("BEZX %lf, %lf, %lf, %lf\n",x1,x[0],x[1],x[3]);
+		}
 		bez_curv.push_back({bez_x,bez_y});
+		if(std::isnan(bez_curv[i][0]) || std::isnan(bez_curv[i][0])){
+			printf("%lf, %lf\n",bez_curv[i][0],bez_curv[i][1]);
+		}
 	}
 
 	double funcreturn=0.0;
@@ -163,7 +175,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		double py3=px3;
 		double px4=pow(t,4);
 		double py4=px4;
-		for(int j=0;j<cols-3;j++){
+		for(int j=0;j<cols-7;j++){
 			double dist2= pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2); //Squared distance
 			// printf("D2: %e, %e\n",(1/dist2)*exp(-bez_alpha*dist2),funcreturn);
 			
@@ -205,6 +217,32 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		}
 		
 	}
+	if(grad){
+		if(nanflag==0 && std::isnan(grad[0])){
+			nanflag=1;
+			ROS_ERROR("MYFUNC grad 0\n");
+		}
+		if(nanflag==0 && std::isnan(grad[1])){
+			nanflag=1;
+			ROS_ERROR("MYFUNC grad 1\n");
+		}
+		if(nanflag==0 && std::isnan(grad[2])){
+			nanflag=1;
+			ROS_ERROR("MYFUNC grad 2\n");
+		}
+		if(nanflag==0 && std::isnan(grad[3])){
+			nanflag=1;
+			ROS_ERROR("MYFUNC grad 3\n");
+		}
+		if(nanflag==0 && std::isnan(grad[4])){
+			nanflag=1;
+			ROS_ERROR("MYFUNC grad 4\n");
+		}
+		if(nanflag==0 && std::isnan(funcreturn)){
+			nanflag=1;
+			ROS_ERROR("MYFUNC return\n");
+		}
+	}
 
 	return funcreturn;
 }
@@ -240,7 +278,6 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	//[2] -> y3
 	//[3] -> x4
 	//[4] -> y4
-	int nanflag=0;
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
 		double t=double(i)/double(bez_curv_pts);
@@ -319,9 +356,9 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		//Max change (+ & -) in velocity
 		result[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
 		result[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-		if(isnan(result[9*i+2])){
-			printf("NAN %lf, %lf, %lf, %lf, %lf, %lf\n",t,x[0],x[1],x[2],x[3],x[4]);
-		}
+		// if(isnan(result[9*i+2])){
+		// 	printf("NAN %lf, %lf, %lf, %lf, %lf, %lf\n",t,x[0],x[1],x[2],x[3],x[4]);
+		// }
 
 		if(grad){
 	/*+_x2*/grad[(9*i+2)*n]=2*(x_dot*x_ddot+y_dot*y_ddot)*((pdx2*x_ddot+pddx2*x_dot)*(pow(x_dot,2)+pow(y_dot,2))-x_dot*pdx2*(x_dot*x_ddot+y_dot*y_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2);
@@ -396,29 +433,32 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 			grad[(9*i+8)*n+2]=-grad[(9*i+8)*n+2]/result[9*i+8];
 			grad[(9*i+8)*n+3]=-grad[(9*i+8)*n+3]/result[9*i+8];
 			grad[(9*i+8)*n+4]=-grad[(9*i+8)*n+4]/result[9*i+8];
-			if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
-				nanflag=1;
-				printf("NAN %e, %e\n",myval,result[9*i+8]);
-			}
+			// if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
+			// 	nanflag=1;
+			// 	ROS_ERROR("NAN %e, %e\n",myval,result[9*i+8]);
+			// }
 		}
 
 		double myval=result[9*i+8];
 		result[9*i+8]=1.0/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
-		if(std::isnan(result[9*i+8])){
+		if(nanflag==0 && std::isnan(result[9*i+8])){
+			nanflag=1;
 			printf("NAN %lf\n",myval);
 		}
 		
 	}
 
 	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
-		if(std::isnan(result[i])){
-			printf("Result nan %d\n",i);
+		if(nanflag==0 && std::isnan(result[i])){
+			nanflag=1;
+			ROS_ERROR("Result nan %d\n",i);
 		}
 	}
 	if(grad){
 		for(int i=0;i<=(9*(bez_curv_pts-1)+8)*n+4;i++){
-			if(std::isnan(grad[i])){
-				printf("Grad nan %d\n",i);
+			if(nanflag==0 && std::isnan(grad[i])){
+				nanflag=1;
+				ROS_ERROR("Grad nan %d\n",i);
 			}
 		}
 	}
@@ -595,22 +635,30 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 		for(int j=0;j<4;j++){
 			curdist=sqrt(pow(bez_x-lead_ptsx[j],2)+pow(bez_y-lead_ptsy[j],2));
 			sum_dist+=exp(-bez_beta*curdist);
-			grad[0]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
-			grad[1]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
-			grad[2]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
-			grad[3]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
-			grad[4]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
+			if(grad){
+				grad[0]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
+				grad[1]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
+				grad[2]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
+				grad[3]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
+				grad[4]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
+			}
 		}	
 	}
-	for(int i=0;i<nMPC*kMPC;i++){
-		grad[0]=-grad[0]/sum_dist; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
-		grad[1]=-grad[1]/sum_dist;
-		grad[2]=-grad[2]/sum_dist;
-		grad[3]=-grad[3]/sum_dist;
-		grad[4]=-grad[4]/sum_dist;
+	if(grad){
+		for(int i=0;i<5;i++){
+			grad[i]=-grad[i]/sum_dist; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
+			if(nanflag==0 && std::isnan(grad[i])){
+				nanflag=1;
+				ROS_ERROR("PURSUIT grad %d\n",i);
+			}
+		}
 	}
-	result[0]=1.0/double(bez_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 
+	result[0]=1.0/double(bez_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
+	if(nanflag==0 && std::isnan(result[0])){
+		nanflag=1;
+		ROS_ERROR("PURSUIT result \n");
+	}
 }
 
 
@@ -658,7 +706,9 @@ class GapBarrier
 		ros::Publisher lobs;
 		ros::Publisher robs;
 		ros::Publisher bez_mark;
+		ros::Publisher lead_bez;
 		ros::Publisher vehicle_detect;
+		ros::Publisher leader_traj;
 		ros::Publisher driver_pub;
 		ros::Publisher cv_ranges_pub;
 
@@ -700,6 +750,8 @@ class GapBarrier
 		visualization_msgs::Marker lobs_marker;
 		visualization_msgs::Marker robs_marker;
 		visualization_msgs::Marker bez;
+		visualization_msgs::Marker lead_track;
+		visualization_msgs::Marker pursuit_marker;
 		visualization_msgs::Marker vehicle_detect_path;
 
 		//steering & stop time
@@ -1033,6 +1085,8 @@ class GapBarrier
 			lobs=nf.advertise<visualization_msgs::Marker>("lobs",2);
 			robs=nf.advertise<visualization_msgs::Marker>("robs",2);
 			bez_mark=nf.advertise<visualization_msgs::Marker>("bez",2);
+			lead_bez=nf.advertise<visualization_msgs::Marker>("lead_bez",2);
+			leader_traj=nf.advertise<visualization_msgs::Marker>("leader_traj",2);
 			vehicle_detect=nf.advertise<visualization_msgs::Marker>("vehicle_detect",2);
 			driver_pub = nf.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
 
@@ -2584,21 +2638,23 @@ class GapBarrier
 				// printf("Seems that once measurements get missed, can run into cases of states exploding\n");
 
 				// printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-				if(car_detects[q].state[3]>0.3){
-					std::cout << "State:\n" << car_detects[q].state << std::endl;
-					std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-					std::cout << "Pred State:\n" << pred_state << std::endl;
-					std::cout << "Measure:\n" << meas_vec << std::endl;
-					printf("%d\n",car_detects[q].miss_fr);
-				}
+				// if(car_detects[q].state[3]>0.3){
+				// 	std::cout << "State:\n" << car_detects[q].state << std::endl;
+				// 	std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
+				// 	std::cout << "Pred State:\n" << pred_state << std::endl;
+				// 	std::cout << "Measure:\n" << meas_vec << std::endl;
+				// 	printf("%d\n",car_detects[q].miss_fr);
+				// }
 
 				//Now, for the leader-follower MPC pursuit, determine if there is only one detection and it is being reasonably tracked
 				if(leader_detect==0){
 					if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
 						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
 							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
-								if(tan(car_detects[q].state[4])/wheelbase*bez_t_end*car_detects[q].state[3]<2*M_PI){ //Doesn't complete full rotation of 2*PI over the future trajectory
-									leader_detect=1; //Leader detected
+								if(car_detects[q].state[0]>0){
+									if(tan(car_detects[q].state[4])/wheelbase*bez_t_end*car_detects[q].state[3]<2*M_PI){ //Doesn't complete full rotation of 2*PI over the future trajectory
+										leader_detect=1; //Leader detected
+									}
 								}
 							}
 						}
@@ -3114,21 +3170,44 @@ class GapBarrier
 					if(car_detects[0].state[4]<0){ //Circular arc going the opposite direction of curvature
 						theta_rot+=M_PI;
 					}
-					bez_pts[0][0]=car_detects[0].state[0]+copy[0][0]*cos(theta_rot)-copy[1][0]*sin(theta_rot);
-					bez_pts[1][0]=car_detects[0].state[1]+copy[0][0]*sin(theta_rot)+copy[1][0]*cos(theta_rot);
+					//Copy Y represents X, X represents -Y
+					bez_pts[0][0]=car_detects[0].state[0]+copy[1][0]*cos(theta_rot)+copy[0][0]*sin(theta_rot);
+					bez_pts[1][0]=car_detects[0].state[1]+copy[1][0]*sin(theta_rot)-copy[0][0]*cos(theta_rot);
 					
-					bez_pts[0][1]=car_detects[0].state[0]+copy[0][1]*cos(theta_rot)-copy[1][1]*sin(theta_rot);
-					bez_pts[1][1]=car_detects[0].state[1]+copy[0][1]*sin(theta_rot)+copy[1][1]*cos(theta_rot);
+					bez_pts[0][1]=car_detects[0].state[0]+copy[1][1]*cos(theta_rot)+copy[0][1]*sin(theta_rot);
+					bez_pts[1][1]=car_detects[0].state[1]+copy[1][1]*sin(theta_rot)-copy[0][1]*cos(theta_rot);
 
-					bez_pts[0][2]=car_detects[0].state[0]+copy[0][2]*cos(theta_rot)-copy[1][2]*sin(theta_rot);
-					bez_pts[1][2]=car_detects[0].state[1]+copy[0][2]*sin(theta_rot)+copy[1][2]*cos(theta_rot);
+					bez_pts[0][2]=car_detects[0].state[0]+copy[1][2]*cos(theta_rot)+copy[0][2]*sin(theta_rot);
+					bez_pts[1][2]=car_detects[0].state[1]+copy[1][2]*sin(theta_rot)-copy[0][2]*cos(theta_rot);
 
-					bez_pts[0][3]=car_detects[0].state[0]+copy[0][3]*cos(theta_rot)-copy[1][3]*sin(theta_rot);
-					bez_pts[1][3]=car_detects[0].state[1]+copy[0][3]*sin(theta_rot)+copy[1][3]*cos(theta_rot);
+					bez_pts[0][3]=car_detects[0].state[0]+copy[1][3]*cos(theta_rot)+copy[0][3]*sin(theta_rot);
+					bez_pts[1][3]=car_detects[0].state[1]+copy[1][3]*sin(theta_rot)-copy[0][3]*cos(theta_rot);
 
-					bez_pts[0][4]=car_detects[0].state[0]+copy[0][4]*cos(theta_rot)-copy[1][4]*sin(theta_rot);
-					bez_pts[1][4]=car_detects[0].state[1]+copy[0][4]*sin(theta_rot)+copy[1][4]*cos(theta_rot);
-					
+					bez_pts[0][4]=car_detects[0].state[0]+copy[1][4]*cos(theta_rot)+copy[0][4]*sin(theta_rot);
+					bez_pts[1][4]=car_detects[0].state[1]+copy[1][4]*sin(theta_rot)-copy[0][4]*cos(theta_rot);
+
+					//Now, need to bring the points back to the lagging curve, while accommodating the changing leader heading angle
+					memcpy(copy, bez_pts, sizeof(bez_pts));
+					double xv_lead=0;
+					double yv_lead=0;
+					double thta_lead=0;
+					double t=0;
+					//Here, we take the constant velocity, curvature trajectory with the even samples for heading of each control point, bring lag back to follower desired trajectory
+					for(int i=0;i<5;i++){
+						t=i/4.0;
+						xv_lead=-4*copy[0][0]*(-pow(t,3)+3*pow(t,2)-3*t+1)+4*copy[0][1]*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*copy[0][2]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*copy[0][3]*(-4*pow(t,3)+3*pow(t,2))+4*copy[0][4]*pow(t,3);
+						yv_lead=-4*copy[1][0]*(-pow(t,3)+3*pow(t,2)-3*t+1)+4*copy[1][1]*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*copy[1][2]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*copy[1][3]*(-4*pow(t,3)+3*pow(t,2))+4*copy[1][4]*pow(t,3);
+						thta_lead=atan2(yv_lead,xv_lead);
+
+						bez_pts[0][i]-=(pursuit_x*cos(thta_lead)-pursuit_y*sin(thta_lead));
+						bez_pts[1][i]-=(pursuit_x*sin(thta_lead)+pursuit_y*cos(thta_lead));
+
+					}
+
+
+					if(std::isnan(bez_pts[0][0])){
+						ROS_ERROR("BEZPTS ERR %lf, %lf, %lf, %lf, %lf\n",radius,rval,uval,ang_gap,theta_rot);
+					}
 				}
 				else{ //No leader detected, just set to 0 placeholders
 					bez_pts[0][0]=0; bez_pts[1][0]=0;
@@ -3137,7 +3216,6 @@ class GapBarrier
 					bez_pts[0][3]=0; bez_pts[1][3]=0;
 					bez_pts[0][4]=0; bez_pts[1][4]=0;
 				}
-				
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
@@ -3182,6 +3260,8 @@ class GapBarrier
 					opt_params2.push_back(sub_bez_obs[i][1]);
 				}
 				// printf("1: %d, %d 2: %d, %d\n",opt_params1.size(),2*(num_obs+7),opt_params2.size(),2*(num_obs+7));
+
+				//FIX THIS. THE PURSUIT SHULD BE TO THE ACTUAL LEADER, NOT LAGGED
 
 				opt_paramsp.push_back(car_detects[0].state[0]-pursuit_x); //Our target to follow trajectory in X
 				opt_paramsp.push_back(car_detects[0].state[1]-pursuit_y); //And Y
@@ -3252,7 +3332,7 @@ class GapBarrier
 				double bez_x4=0;
 				double bez_y4=0;
 
-				if(isnan(minf)){
+				if(std::isnan(minf)){
 					forcestop=1;
 				}
 				else{
@@ -3517,6 +3597,96 @@ class GapBarrier
 				}
 
 				bez_mark.publish(bez);
+
+
+
+
+				//Publish the bezier points
+				lead_track.header.frame_id = "base_link";
+				lead_track.header.stamp = ros::Time::now();
+				lead_track.type = visualization_msgs::Marker::POINTS;
+				lead_track.id = 0; 
+				lead_track.ns = "points";
+				lead_track.action = visualization_msgs::Marker::ADD;
+				lead_track.scale.x = 0.1;
+				lead_track.color.a = 1.0;
+				lead_track.color.r = 0.8; 
+				lead_track.color.g = 0.3;
+				lead_track.color.b = 0.1;
+				lead_track.pose.orientation.w = 1;
+
+				lead_track.scale.x = 0.1;  // Size of points
+				lead_track.scale.y = 0.1;
+				
+				lead_track.lifetime = ros::Duration(0.1);
+				geometry_msgs::Point p5a;
+				lead_track.points.clear();
+
+				// printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf\n",bez_x1,bez_y2,bez_x2,bez_y3,bez_x3,bez_x4,bez_y4);
+				for(int i=0; i<bez_curv_pts; i++){
+					double t=double(i)/double(bez_curv_pts-1);
+					double bez_x=pow(1-t,4)*bez_pts[0][0]+4*pow(1-t,3)*t*bez_pts[0][1]+6*pow(1-t,2)*pow(t,2)*bez_pts[0][2]+4*(1-t)*pow(t,3)*bez_pts[0][3]+pow(t,4)*bez_pts[0][4];
+					double bez_y=pow(1-t,4)*bez_pts[1][0]+4*pow(1-t,3)*t*bez_pts[1][1]+6*pow(1-t,2)*pow(t,2)*bez_pts[1][2]+4*(1-t)*pow(t,3)*bez_pts[1][3]+pow(t,4)*bez_pts[1][4]; //y1=0
+					p5a.x = bez_x; p5a.y = bez_y; p5a.z = 0;
+					printf("%lf, %lf, %d, %lf\n",bez_x,bez_y,i,t);
+					lead_track.points.push_back(p5a);
+				}
+				printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
+				printf("%lf, %lf\n",bez_pts[0][0],bez_pts[1][0]);
+				printf("%lf, %lf\n",bez_pts[0][1],bez_pts[1][1]);
+				printf("%lf, %lf\n",bez_pts[0][2],bez_pts[1][2]);
+				printf("%lf, %lf\n",bez_pts[0][3],bez_pts[1][3]);
+				printf("%lf, %lf\n",bez_pts[0][4],bez_pts[1][4]);
+
+				printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
+
+				lead_bez.publish(lead_track);
+
+				if(leader_detect==1){
+					pursuit_marker.header.frame_id = "base_link";
+					pursuit_marker.header.stamp = ros::Time::now();
+					pursuit_marker.type = visualization_msgs::Marker::POINTS;
+					pursuit_marker.id = 0; 
+					pursuit_marker.action = visualization_msgs::Marker::ADD;
+					pursuit_marker.scale.x = 0.1;
+					pursuit_marker.color.a = 1.0;
+					pursuit_marker.color.r = 0.1; 
+					pursuit_marker.color.g = 0.7;
+					pursuit_marker.color.b = 0.9;
+					pursuit_marker.pose.orientation.w = 1;
+					
+					pursuit_marker.lifetime = ros::Duration(0.1);
+					geometry_msgs::Point p3b;
+					pursuit_marker.points.clear();
+					double step_time=std::max(default_dt,dt);
+					double delta_lead=0;
+					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
+					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
+					double radius=wheelbase/tan(delta_lead);
+					printf("Our Speed %lf Lead Speed %lf\n",vel_adapt,car_detects[0].state[3]);
+					for(int i=0;i<nMPC*kMPC;i++){
+						double xl_og=radius*sin(car_detects[0].state[3]*step_time*i/radius);
+						double yl_og=radius*(1-cos(car_detects[0].state[3]*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
+
+						//Find the current heading of the vehicle to get the correct lagging pursuit x & y in base_link
+						double xv_og=car_detects[0].state[3]*cos(car_detects[0].state[3]*step_time*i/radius);
+						double yv_og=car_detects[0].state[3]*sin(car_detects[0].state[3]*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
+
+						double x_lead_d=xv_og*cos(car_detects[0].state[2])-yv_og*sin(car_detects[0].state[2]);
+						double y_lead_d=xv_og*sin(car_detects[0].state[2])+yv_og*cos(car_detects[0].state[2]); //future leader vel in base_link fram (wrt our pursuit vehicle)
+						
+						double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle
+
+						double x_lead=car_detects[0].state[0]-(pursuit_x*cos(thet_lead)-pursuit_y*sin(thet_lead))+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
+						double y_lead=car_detects[0].state[1]-(pursuit_x*sin(thet_lead)+pursuit_y*cos(thet_lead))+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); 
+						//future leader pos in base_link frame (wrt our pursuit vehicle)
+						p3b.x = x_lead;	p3b.y = y_lead;	p3b.z = 0;
+						pursuit_marker.points.push_back(p3b);	
+					}
+
+					leader_traj.publish(pursuit_marker);
+				}
+
 
 				//Implement steering angle based on opt now, use last_delta returned as next delta_init for simulation (overwritten for experiment)
 
