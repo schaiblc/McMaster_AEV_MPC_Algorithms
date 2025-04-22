@@ -8,8 +8,8 @@ width: 0.342 # meters
 buffer_length: 5
 
 # Limits on the speed and steering angle
-max_speed: 2.0 #  meters/second
-min_speed: 0 # Otherwise, vehicle stops
+max_speed: 2.5 #  meters/second
+min_speed: 0.5 # Otherwise, vehicle stops
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
@@ -226,7 +226,7 @@ stop_time1: 1.0
 stop_time2: 1.0
 # Speed control paramteres
 heading_beam_angle: rad(pi/16)
-stop_distance: 0.4 #m
+stop_distance: 0.8 #m
 stop_distance_decay: 0.5 #m
 
 #TEB & Comparison Waypoint Generation
@@ -249,7 +249,7 @@ veh_det_width: 0.4
 use_neural_net: 0
 
 theta_band_smooth: 200
-theta_band_diff: rad(pi/16)
+theta_band_diff: rad(pi/8)
 
 #Bezier MPC Parameters
 bez_ctrl_pts: 5
@@ -257,17 +257,17 @@ bez_curv_pts: 10
 bez_alpha: 5.5
 bez_beta: 10
 bez_min_dist: 0.3
-bez_t_end: 1
+bez_t_end: 2
 obs_sep: 0.2
 max_obs: 50
 
 #Leader-follower MPC pursuit parameters
-MPC_dist: 0.4 #Min distance, below which we focus on MPC
-pursuit_dist: 1 #Max ddistance, above which we prioritize pursuit
+MPC_dist: 0.8 #Min distance, below which we focus on MPC
+pursuit_dist: 1.5 #Max distance, above which we prioritize pursuit
 transit_rate: 0.05 #Transition rate, how fast to switch sweightings on each mode
 min_pursue: 0.7 #Min distance allowed to the leader
 min_delta: 0.002 #Minimum delta, to ensure our circle arc radius doesn't become 1/0 (undefined)
-pursuit_x: 2.1 #The trajectory at which we want to maintain psoition from leader, here we want leader 1.1 m ahead in x
+pursuit_x: 2.1 #The trajectory at which we want to maintain position from leader, here we want leader 1.1 m ahead in x
 pursuit_y: -0.6 #And 0.1 m ahead in +y
 pursuit_beta: 80 #Smoothing factor for min_dist to leader
 
@@ -280,6 +280,6 @@ use_camera: 1
 
 #Important tuning parameters
 #-> max_lidar_range_opt depending on hall width, sim map, etc
-#-> Max and min speeds for bezier (min speed>0) and velocity (min-speed can be 0)
+#-> Max and min speeds for bezier (min speed>0) and velocity (min_speed can be 0)
 
 #For berlin.yaml, max_lidar_range_opt should be 3.0
