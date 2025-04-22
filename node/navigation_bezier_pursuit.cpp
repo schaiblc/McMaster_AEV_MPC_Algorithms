@@ -107,7 +107,7 @@ struct vehicle_detection
 };
 
 int nanflag=0;
-
+int errflag=0;
 
 double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //NLOPT cost function
 {
@@ -133,7 +133,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	double pursuit_weight=xopt[0][6];
 	int leader_detect=xopt[1][6];
 
-	double base_pursue_w=1; //How to scale each term before applying the time-variant transistion scaling via pursuit_weight
+	double base_pursue_w=0.1; //How to scale each term before applying the time-variant transistion scaling via pursuit_weight
 	
 	std::vector<std::vector<double>> bez_curv;
 	//Optimization variables:
@@ -142,9 +142,10 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	//[2] -> y3
 	//[3] -> x4
 	//[4] -> y4
-	if(nanflag==1){
-		return 0;
-	}
+	
+	// if(nanflag==1){
+	// 	return 0;
+	// }
 
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
@@ -152,7 +153,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*x[3];
 		double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
 		if(nanflag==0 && std::isnan(bez_x)){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("BEZX %lf, %lf, %lf, %lf\n",x1,x[0],x[1],x[3]);
 		}
 		bez_curv.push_back({bez_x,bez_y});
@@ -182,6 +183,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			// if(bez_alpha*dist2>100) continue; //Numerical error since too small so skip this obs
 			
 			funcreturn=funcreturn+(1-pursuit_weight)*(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
+			
 			//Next, find grad for each of five variables
 			if(grad){
 	/* x2 */ 	grad[0]=grad[0]-(1-pursuit_weight)*2*(bez_curv[i][0]-xopt[0][j+7])*(bez_alpha/dist2+1.0/pow(dist2,2))*exp(-bez_alpha*dist2)*px2;
@@ -219,31 +221,32 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	}
 	if(grad){
 		if(nanflag==0 && std::isnan(grad[0])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC grad 0\n");
 		}
 		if(nanflag==0 && std::isnan(grad[1])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC grad 1\n");
 		}
 		if(nanflag==0 && std::isnan(grad[2])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC grad 2\n");
 		}
 		if(nanflag==0 && std::isnan(grad[3])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC grad 3\n");
 		}
 		if(nanflag==0 && std::isnan(grad[4])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC grad 4\n");
 		}
 		if(nanflag==0 && std::isnan(funcreturn)){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("MYFUNC return\n");
 		}
 	}
-
+		
+	// printf("%lf, %lf\nUs: %lf, %lf, %lf, %lf, %lf\nRef: %lf, %lf, %lf, %lf, %lf\n",func1,func2,x[0],x[1],x[2],x[3],x[4],x2_lead,x3_lead,y3_lead,x4_lead,y4_lead);
 	return funcreturn;
 }
 
@@ -410,153 +413,65 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	/*-_y4*/grad[(9*i+7)*n+4]=-wheelbase/(1+pow(wheelbase*curv,2))*pdcurvy4+2*pow(wheelbase,3)*curv*curv_dot/pow(1+pow(wheelbase*curv,2),2)*pcurvy4;
 		}
 
-		//Smooth minimum obstacle distance
-		for(int j=0;j<cols-7;j++){
-			double dist1= pow(pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
-			result[9*i+8]=result[9*i+8]+exp(-1.0*double(bez_beta)*dist1);
-			if(result[9*i+8]==0){
-				printf("ZERO %d, %d, %e, %lf, %lf, %lf, %lf\n",i,j,result[9*i+8], bez_curv[i][0],xopt[0][j+7],bez_curv[i][1],xopt[1][j+7]);
-			}
+		if(cols==7){ //No obs detected
+			result[9*i+8]=-10;
+		}
+		else{
+			//Smooth minimum obstacle distance
+			for(int j=0;j<cols-7;j++){
+				double dist1= pow(pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
+				result[9*i+8]=result[9*i+8]+exp(-1.0*double(bez_beta)*dist1);
+				if(result[9*i+8]==0){
+					printf("ZERO %d, %d, %e, %lf, %lf, %lf, %lf\n",i,j,result[9*i+8], bez_curv[i][0],xopt[0][j+7],bez_curv[i][1],xopt[1][j+7]);
+				}
+				
 
+				if(grad){
+			/*x2*/	grad[(9*i+8)*n]=grad[(9*i+8)*n]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px2;
+			/*x3*/	grad[(9*i+8)*n+1]=grad[(9*i+8)*n+1]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px3;
+			/*y3*/	grad[(9*i+8)*n+2]=grad[(9*i+8)*n+2]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][1]-xopt[1][j+7])/dist1*py3;
+			/*x4*/	grad[(9*i+8)*n+3]=grad[(9*i+8)*n+3]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px4;
+			/*y4*/	grad[(9*i+8)*n+4]=grad[(9*i+8)*n+4]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][1]-xopt[1][j+7])/dist1*py4;
+				}
+			}
 			if(grad){
-		/*x2*/	grad[(9*i+8)*n]=grad[(9*i+8)*n]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px2;
-		/*x3*/	grad[(9*i+8)*n+1]=grad[(9*i+8)*n+1]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px3;
-		/*y3*/	grad[(9*i+8)*n+2]=grad[(9*i+8)*n+2]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][1]-xopt[1][j+7])/dist1*py3;
-		/*x4*/	grad[(9*i+8)*n+3]=grad[(9*i+8)*n+3]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px4;
-		/*y4*/	grad[(9*i+8)*n+4]=grad[(9*i+8)*n+4]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][1]-xopt[1][j+7])/dist1*py4;
+				double myval=grad[(9*i+8)*n];
+				grad[(9*i+8)*n]=-grad[(9*i+8)*n]/result[9*i+8];
+				grad[(9*i+8)*n+1]=-grad[(9*i+8)*n+1]/result[9*i+8];
+				grad[(9*i+8)*n+2]=-grad[(9*i+8)*n+2]/result[9*i+8];
+				grad[(9*i+8)*n+3]=-grad[(9*i+8)*n+3]/result[9*i+8];
+				grad[(9*i+8)*n+4]=-grad[(9*i+8)*n+4]/result[9*i+8];
+				// if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
+				// 	nanflag=1;
+				// 	ROS_ERROR("NAN %e, %e\n",myval,result[9*i+8]);
+				// }
 			}
-		}
-		if(grad){
-			double myval=grad[(9*i+8)*n];
-			grad[(9*i+8)*n]=-grad[(9*i+8)*n]/result[9*i+8];
-			grad[(9*i+8)*n+1]=-grad[(9*i+8)*n+1]/result[9*i+8];
-			grad[(9*i+8)*n+2]=-grad[(9*i+8)*n+2]/result[9*i+8];
-			grad[(9*i+8)*n+3]=-grad[(9*i+8)*n+3]/result[9*i+8];
-			grad[(9*i+8)*n+4]=-grad[(9*i+8)*n+4]/result[9*i+8];
-			// if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
-			// 	nanflag=1;
-			// 	ROS_ERROR("NAN %e, %e\n",myval,result[9*i+8]);
-			// }
-		}
 
-		double myval=result[9*i+8];
-		result[9*i+8]=1.0/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
-		if(nanflag==0 && std::isnan(result[9*i+8])){
-			nanflag=1;
-			printf("NAN %lf\n",myval);
+			double myval=result[9*i+8];
+			result[9*i+8]=1.0/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
+			if(nanflag==0 && std::isnan(result[9*i+8])){
+				// nanflag=1;
+				printf("NAN %lf\n",myval);
+			}
 		}
 		
 	}
 
 	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
 		if(nanflag==0 && std::isnan(result[i])){
-			nanflag=1;
+			// nanflag=1;
 			ROS_ERROR("Result nan %d\n",i);
 		}
 	}
 	if(grad){
 		for(int i=0;i<=(9*(bez_curv_pts-1)+8)*n+4;i++){
 			if(nanflag==0 && std::isnan(grad[i])){
-				nanflag=1;
+				// nanflag=1;
 				ROS_ERROR("Grad nan %d\n",i);
 			}
 		}
 	}
 
-
-	//Manual checking of analytical gradients
-	// std::vector<std::vector<double>> bez_curv1;
-	// double hval=1e-8;
-	// //Create the discretized Bezier Curve
-	// for(int i=0; i<bez_curv_pts; i++){
-	// 	double t=double(i)/double(bez_curv_pts-1);
-	// 	double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*(hval+x[3]);
-	// 	double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
-	// 	bez_curv1.push_back({bez_x,bez_y});
-	// }
-	// double result1[9*(bez_curv_pts-1)+9];
-	// if(result1){
-	// 	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
-	// 		result1[i]=0;
-	// 	}
-	// }
-	
-
-	// if(grad){
-	// 	for(int i=0;i<bez_curv_pts; i++){
-	// 		double t=double(i)/double(bez_curv_pts-1);
-	// 		double x_dot=4*x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*(hval+x[3])*pow(t,3);
-	// 		double x_ddot=4*x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*(hval+x[3])*pow(t,2);
-	// 		double x_dddot=4*x1*(-24*t+18)+6*x[0]*(24*t-12)+4*x[1]*(-24*t+6)+24*(hval+x[3])*t;
-
-	// 		double y_dot=6*y2*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[2]*(-4*pow(t,3)+3*pow(t,2))+4*x[4]*pow(t,3);
-	// 		double y_ddot=6*y2*(12*pow(t,2)-12*t+2)+4*x[2]*(-12*pow(t,2)+6*t)+12*x[4]*pow(t,2);
-	// 		double y_dddot=6*y2*(24*t-12)+4*x[2]*(-24*t+6)+24*x[4]*t;
-
-	// 		double curv=(x_dot*y_ddot-y_dot*x_ddot)/(pow(pow(x_dot,2)+pow(y_dot,2),1.5));
-	// 		double curv_dot=((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))/pow((pow(x_dot,2)+pow(y_dot,2)),2.5);
-
-	// 		double px2=6*pow(1-t,2)*pow(t,2);double px3=4*(1-t)*pow(t,3);double py3=px3;double px4=pow(t,4);double py4=px4; //Partials of original x & y
-	// 		double pdx2=6*(4*pow(t,3)-6*pow(t,2)+2*t);double pdx3=4*(-4*pow(t,3)+3*pow(t,2));double pdy3=pdx3;double pdx4=4*pow(t,3);double pdy4=pdx4; //X_dot & y_dot
-	// 		double pddx2=6*(12*pow(t,2)-12*t+2);double pddx3=4*(-12*pow(t,2)+6*t);double pddy3=pddx3;double pddx4=12*pow(t,2);double pddy4=pddx4; //x_ddot & y_ddot
-	// 		double pdddx2=6*(24*t-12);double pdddx3=4*(-24*t+6);double pdddy3=pdddx3;double pdddx4=24*t;double pdddy4=pdddx4; //x_dddot & y_dddot
-			
-	// 		double pcurvx2=((y_ddot*pdx2-y_dot*pddx2)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx2*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvx3=((y_ddot*pdx3-y_dot*pddx3)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvy3=((x_dot*pddy3-x_ddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvx4=((y_ddot*pdx4-y_dot*pddx4)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvy4=((x_dot*pddy4-x_ddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-			
-	// 		double num_pdcurvx2=(y_dddot*pdx2-y_dot*pdddx2)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx2*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx2+x_ddot*pdx2)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx2-y_dot*pddx2)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvx3=(y_dddot*pdx3-y_dot*pdddx3)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx3*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx3+x_ddot*pdx3)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx3-y_dot*pddx3)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvy3=(x_dot*pdddy3-x_dddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy3*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy3+y_ddot*pdy3)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy3-x_ddot*pdy3)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvx4=(y_dddot*pdx4-y_dot*pdddx4)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx4*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx4+x_ddot*pdx4)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx4-y_dot*pddx4)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvy4=(x_dot*pdddy4-x_dddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy4*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy4+y_ddot*pdy4)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy4-x_ddot*pdy4)*(x_dot*x_ddot+y_dot*y_ddot));
-
-	// 		double pdcurvx2=(num_pdcurvx2*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx2)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvx3=(num_pdcurvx3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvy3=(num_pdcurvy3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvx4=(num_pdcurvx4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvy4=(num_pdcurvy4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-
-
-	// 		//Max and min velocity
-	// 		result1[9*i]=pow(x_dot,2)+pow(y_dot,2)-pow(max_v,2)*pow(t_end,2);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i,i,grad[(9*i)*n+3],(result1[9*i]-result[9*i])/hval);
-	// 		result1[9*i+1]=-pow(x_dot,2)-pow(y_dot,2)+pow(min_v,2)*pow(t_end,2);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+1,i,grad[(9*i+1)*n+3],(result1[9*i+1]-result[9*i+1])/hval);
-
-	// 		//Max change (+ & -) in velocity
-	// 		result1[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+2,i,grad[(9*i+2)*n+3],(result1[9*i+2]-result[9*i+2])/hval);
-	// 		result1[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+3,i,grad[(9*i+3)*n+3],(result1[9*i+3]-result[9*i+3])/hval);
-
-	// 		//Max (+ & -) curvature
-	// 		result1[9*i+4]=wheelbase*curv-tan(max_delta);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+4,i,grad[(9*i+4)*n+3],(result1[9*i+4]-result[9*i+4])/hval);
-	// 		result1[9*i+5]=-wheelbase*curv-tan(max_delta);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+5,i,grad[(9*i+5)*n+3],(result1[9*i+5]-result[9*i+5])/hval);
-
-	// 		//Max change (+ & -) in curvature
-	// 		result1[9*i+6]=wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+6,i,grad[(9*i+6)*n+3],(result1[9*i+6]-result[9*i+6])/hval);
-	// 		result1[9*i+7]=-wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+7,i,grad[(9*i+7)*n+3],(result1[9*i+7]-result[9*i+7])/hval);
-
-	// 		//Smooth minimum obstacle distance
-	// 		for(int j=0;j<cols-7;j++){
-	// 			double dist1= pow(pow(bez_curv1[i][0]-xopt[0][j+7],2)+pow(bez_curv1[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
-	// 			result1[9*i+8]=result1[9*i+8]+exp(-1*double(bez_beta)*dist1);
-
-	// 		}
-			
-
-	// 		result1[9*i+8]=1.0/double(bez_beta)*log(result1[9*i+8])+bez_min_dist;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+8,i,grad[(9*i+8)*n+3],(result1[9*i+8]-result[9*i+8])/hval);
-			
-	// 	}
-	// }
 
 }
 
@@ -636,29 +551,32 @@ void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double
 			curdist=sqrt(pow(bez_x-lead_ptsx[j],2)+pow(bez_y-lead_ptsy[j],2));
 			sum_dist+=exp(-bez_beta*curdist);
 			if(grad){
-				grad[0]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
-				grad[1]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
-				grad[2]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
-				grad[3]=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
-				grad[4]=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
+				grad[0]+=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px2; //x2
+				grad[1]+=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px3; //x3
+				grad[2]+=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py3; //y3
+				grad[3]+=exp(-bez_beta*curdist)*(bez_x-lead_ptsx[j])/curdist*px4; //x4
+				grad[4]+=exp(-bez_beta*curdist)*(bez_y-lead_ptsy[j])/curdist*py4; //y4
 			}
 		}	
 	}
+
+
 	if(grad){
 		for(int i=0;i<5;i++){
 			grad[i]=-grad[i]/sum_dist; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
 			if(nanflag==0 && std::isnan(grad[i])){
-				nanflag=1;
+				// nanflag=1;
 				ROS_ERROR("PURSUIT grad %d\n",i);
 			}
 		}
 	}
-
 	result[0]=1.0/double(bez_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
 	if(nanflag==0 && std::isnan(result[0])){
-		nanflag=1;
+		// nanflag=1;
 		ROS_ERROR("PURSUIT result \n");
 	}
+
+
 }
 
 
@@ -707,6 +625,7 @@ class GapBarrier
 		ros::Publisher robs;
 		ros::Publisher bez_mark;
 		ros::Publisher lead_bez;
+		ros::Publisher start_mark;
 		ros::Publisher vehicle_detect;
 		ros::Publisher leader_traj;
 		ros::Publisher driver_pub;
@@ -751,6 +670,7 @@ class GapBarrier
 		visualization_msgs::Marker robs_marker;
 		visualization_msgs::Marker bez;
 		visualization_msgs::Marker lead_track;
+		visualization_msgs::Marker start_marker;
 		visualization_msgs::Marker pursuit_marker;
 		visualization_msgs::Marker vehicle_detect_path;
 
@@ -1086,6 +1006,7 @@ class GapBarrier
 			robs=nf.advertise<visualization_msgs::Marker>("robs",2);
 			bez_mark=nf.advertise<visualization_msgs::Marker>("bez",2);
 			lead_bez=nf.advertise<visualization_msgs::Marker>("lead_bez",2);
+			start_mark=nf.advertise<visualization_msgs::Marker>("start_mark",2);
 			leader_traj=nf.advertise<visualization_msgs::Marker>("leader_traj",2);
 			vehicle_detect=nf.advertise<visualization_msgs::Marker>("vehicle_detect",2);
 			driver_pub = nf.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
@@ -3263,8 +3184,8 @@ class GapBarrier
 
 				//FIX THIS. THE PURSUIT SHULD BE TO THE ACTUAL LEADER, NOT LAGGED
 
-				opt_paramsp.push_back(car_detects[0].state[0]-pursuit_x); //Our target to follow trajectory in X
-				opt_paramsp.push_back(car_detects[0].state[1]-pursuit_y); //And Y
+				opt_paramsp.push_back(car_detects[0].state[0]); //Our target to follow trajectory in X
+				opt_paramsp.push_back(car_detects[0].state[1]); //And Y
 				opt_paramsp.push_back(car_detects[0].state[2]); //Leader's theta
 				opt_paramsp.push_back(car_detects[0].state[3]); //Leader's constant velocity over traj
 				double delta_lead=0;
@@ -3305,7 +3226,6 @@ class GapBarrier
 				x[2]=yptplot[0]; //y3
 				x[3]=xptplot[1]; //x4
 				x[4]=yptplot[1]; //y4
-				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
 
 				if(leader_detect==1){ //Weighted starting guess, trying to copy the puruit control points to follow trajectory
 					x[0]=(1-pursuit_weight)*x[0]+pursuit_weight*bez_pts[0][2];
@@ -3315,6 +3235,11 @@ class GapBarrier
 					x[4]=(1-pursuit_weight)*x[4]+pursuit_weight*bez_pts[1][4];
 					
 				}
+
+
+				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
+				double starting[5];
+				starting[0]=x[0]; starting[1]=x[1]; starting[2]=x[2]; starting[3]=x[3]; starting[4]=x[4];
 
 				int successful_opt=0;
 
@@ -3343,8 +3268,9 @@ class GapBarrier
 
 				if (optim < 0) {
 					safe_distance_adapt=safe_distance_adapt/2;
-					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
-					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
+					ROS_ERROR("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
+					ROS_ERROR("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
+					
 				}
 				else {
 					successful_opt=1;
@@ -3357,6 +3283,7 @@ class GapBarrier
 					bez_y3=x[2];
 					bez_x4=x[3];
 					bez_y4=x[4];
+					
 					//Integrate over curve until next sample to obtain v, delta
 					double dist_trav=0;
 					double dist_des=std::max(vel_adapt,min_speed)*std::max(default_dt,dt);
@@ -3390,7 +3317,7 @@ class GapBarrier
 
 					last_delta=atan2(curv*wheelbase,1);
 					vel_adapt=std::min(pow(pow(x_dot,2)+pow(y_dot,2),0.5)/bez_t_end,max_speed);
-
+					
 
 					//Find minimum distance
 					for(int i=1; i<bez_curv_pts;i++){
@@ -3628,19 +3555,60 @@ class GapBarrier
 					double bez_x=pow(1-t,4)*bez_pts[0][0]+4*pow(1-t,3)*t*bez_pts[0][1]+6*pow(1-t,2)*pow(t,2)*bez_pts[0][2]+4*(1-t)*pow(t,3)*bez_pts[0][3]+pow(t,4)*bez_pts[0][4];
 					double bez_y=pow(1-t,4)*bez_pts[1][0]+4*pow(1-t,3)*t*bez_pts[1][1]+6*pow(1-t,2)*pow(t,2)*bez_pts[1][2]+4*(1-t)*pow(t,3)*bez_pts[1][3]+pow(t,4)*bez_pts[1][4]; //y1=0
 					p5a.x = bez_x; p5a.y = bez_y; p5a.z = 0;
-					printf("%lf, %lf, %d, %lf\n",bez_x,bez_y,i,t);
+					// printf("%lf, %lf, %d, %lf\n",bez_x,bez_y,i,t);
 					lead_track.points.push_back(p5a);
 				}
-				printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
-				printf("%lf, %lf\n",bez_pts[0][0],bez_pts[1][0]);
-				printf("%lf, %lf\n",bez_pts[0][1],bez_pts[1][1]);
-				printf("%lf, %lf\n",bez_pts[0][2],bez_pts[1][2]);
-				printf("%lf, %lf\n",bez_pts[0][3],bez_pts[1][3]);
-				printf("%lf, %lf\n",bez_pts[0][4],bez_pts[1][4]);
+				// printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
+				// printf("%lf, %lf\n",bez_pts[0][0],bez_pts[1][0]);
+				// printf("%lf, %lf\n",bez_pts[0][1],bez_pts[1][1]);
+				// printf("%lf, %lf\n",bez_pts[0][2],bez_pts[1][2]);
+				// printf("%lf, %lf\n",bez_pts[0][3],bez_pts[1][3]);
+				// printf("%lf, %lf\n",bez_pts[0][4],bez_pts[1][4]);
 
-				printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
+				// printf("!!!!!!!!!!!!!!!!!!!!!!!\n");
 
 				lead_bez.publish(lead_track);
+
+
+
+				//Publish the bezier points
+				start_marker.header.frame_id = "base_link";
+				start_marker.header.stamp = ros::Time::now();
+				start_marker.type = visualization_msgs::Marker::POINTS;
+				start_marker.id = 0; 
+				start_marker.ns = "points";
+				start_marker.action = visualization_msgs::Marker::ADD;
+				start_marker.scale.x = 0.1;
+				start_marker.color.a = 1.0;
+				start_marker.color.r = 0.2; 
+				start_marker.color.g = 0.9;
+				start_marker.color.b = 0.1;
+				start_marker.pose.orientation.w = 1;
+
+				start_marker.scale.x = 0.1;  // Size of points
+				start_marker.scale.y = 0.1;
+				
+				start_marker.lifetime = ros::Duration(0.1);
+				geometry_msgs::Point p7a;
+				start_marker.points.clear();
+
+				// printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf\n",bez_x1,bez_y2,bez_x2,bez_y3,bez_x3,bez_x4,bez_y4);
+				for(int i=0; i<bez_curv_pts; i++){
+					double t=double(i)/double(bez_curv_pts-1);
+					double bez_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*starting[0]+4*(1-t)*pow(t,3)*starting[1]+pow(t,4)*starting[3];
+					double bez_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*starting[2]+pow(t,4)*starting[4]; //y1=0
+					p7a.x = bez_x; p7a.y = bez_y; p7a.z = 0;
+					start_marker.points.push_back(p7a);
+				}
+
+				start_mark.publish(start_marker);
+
+
+
+
+
+
+
 
 				if(leader_detect==1){
 					pursuit_marker.header.frame_id = "base_link";
@@ -3654,7 +3622,7 @@ class GapBarrier
 					pursuit_marker.color.g = 0.7;
 					pursuit_marker.color.b = 0.9;
 					pursuit_marker.pose.orientation.w = 1;
-					
+				
 					pursuit_marker.lifetime = ros::Duration(0.1);
 					geometry_msgs::Point p3b;
 					pursuit_marker.points.clear();
