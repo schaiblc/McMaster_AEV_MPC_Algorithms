@@ -198,7 +198,7 @@ Visualization Manager:
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /navigation_bezier/lead_bez
       Name: Marker
       Namespaces:
@@ -216,6 +216,14 @@ Visualization Manager:
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /navigation_bezier/leader_traj
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /navigation_bezier/start_mark
       Name: Marker
       Namespaces:
         {}
