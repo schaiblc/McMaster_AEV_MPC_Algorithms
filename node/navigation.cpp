@@ -347,6 +347,7 @@ class GapBarrier
 		double vel_adapt=0.1;
 
 		double testx, testy, testtheta;
+		int counter=0;
 
 		//odom and map transforms for map localization and tf of occupancy grid points
 		double mapx=0, mapy=0, maptheta=0;
@@ -789,6 +790,30 @@ class GapBarrier
 				map_saved=1;
 			}
 			
+			// if(map_saved==0){ //Upon startup, save the map once and for full run
+			// 	for (int i=0;i<map_msg.info.width*map_msg.info.height;i++){
+			// 		if(map_msg.data[i]==100){
+			// 			int add_pt=1;
+			// 			for(int j=0;j<map_pts.size();j++){
+			// 				if(pow(map_pts[j][0]-map_msg.info.origin.position.x-i%map_msg.info.width*map_msg.info.resolution,2)+pow(map_pts[j][1]-map_msg.info.origin.position.y-i/map_msg.info.width*map_msg.info.resolution,2)<map_thresh){
+			// 					add_pt=0; //If the points are too close, don't add in order to reduce computation load
+			// 					break;
+			// 				}
+			// 			}
+			// 			if(add_pt){
+			// 				map_pts.push_back({map_msg.info.origin.position.x+i%map_msg.info.width*map_msg.info.resolution,map_msg.info.origin.position.y+i/map_msg.info.width*map_msg.info.resolution});
+			// 			}
+			// 		}
+			// 	}
+			// 	for(int i=0;i<map_pts.size();i++){
+			// 		FILE *file1w = fopen("/home/gjsk/lidar_scan_results.txt", "a");
+			// 		fprintf(file1w,"%lf,%lf\n",map_pts[i][0],map_pts[i][1]);
+			// 		fclose(file1w);
+			// 	}
+			// 	map_saved=1;
+			// }
+
+
 		}
 
 		void amcl_callback(const geometry_msgs::PoseWithCovarianceStamped & amcl_msg){
@@ -1936,7 +1961,7 @@ class GapBarrier
 
 
 		void lidar_callback(const sensor_msgs::LaserScanConstPtr &data){
-			
+			counter+=1;
 			ls_ang_inc = static_cast<double>(data->angle_increment); 
 			scan_beams = int(2*M_PI/data->angle_increment);
 			ls_str = int(round(scan_beams*right_beam_angle/(2*M_PI)));
@@ -2243,6 +2268,10 @@ class GapBarrier
 				std::vector<double> wc = {0.0, 0.0};
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
+				std::vector<std::vector<double>> obstacle_points_r_MPC;
+
+				std::vector<std::vector<double>> obstacle_points_l_MPC;
+
 				for (int num_MPC=0;num_MPC<nMPC;num_MPC++){
 					std::vector<float> fused_ranges_MPC_tot=fused_ranges_MPC;
 					std::vector<double> lidar_transform_angles_tot=lidar_transform_angles; //The cumulative ranges and angles for both map (if used) and lidar
@@ -2415,12 +2444,12 @@ class GapBarrier
 						end_indx_r_MPC-=1; //We overcounted by one past the end range for both left and right
 						end_indx_l_MPC-=1;
 
-						std::vector<std::vector<double>> obstacle_points_l_MPC;
+						obstacle_points_l_MPC.clear();
 						obstacle_points_l_MPC.push_back({0, max_lidar_range_opt});
 						obstacle_points_l_MPC.push_back({1, max_lidar_range_opt}); 
 						
 						
-						std::vector<std::vector<double>> obstacle_points_r_MPC;
+						obstacle_points_r_MPC.clear();
 						obstacle_points_r_MPC.push_back({0, -max_lidar_range_opt});
 						obstacle_points_r_MPC.push_back({1, -max_lidar_range_opt});
 						
@@ -2676,22 +2705,30 @@ class GapBarrier
 							deltas[i+j*kMPC]=last_delta;
 						}
 						else if(i==1&&j==0){
-							if(theta_refs[j]>0){
-								deltas[i+j*kMPC]=std::min(last_delta+opt_params[2],max_steering_angle);
+							double thetanext=theta_refs[j];
+							while(thetanext>M_PI) thetanext-=2*M_PI;
+							while(thetanext<-M_PI) thetanext+=2*M_PI;
+							double ex_delta=atan((thetanext)*opt_params[1]/opt_params[0]);
+							if(thetanext>0){
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
 							}
-							else if(theta_refs[j]<0){
-								deltas[i+j*kMPC]=std::max(last_delta-opt_params[2],-max_steering_angle);
+							else if(thetanext<0){
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
 							}
 							else{
 								deltas[i+j*kMPC]=last_delta;
 							}
 						}
 						else{
-							if(theta_refs[j]>thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle);
+							double thetanext=theta_refs[j];
+							while(thetanext>thetas[i+j*kMPC]+M_PI) thetanext-=2*M_PI;
+							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
+							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/opt_params[0]);
+							if(thetanext>thetas[i+j*kMPC]){
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle));
 							}
-							else if(theta_refs[j]<thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle);
+							else if(thetanext<thetas[i+j*kMPC]){
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle));
 							}
 							else{
 								deltas[i+j*kMPC]=deltas[i+j*kMPC-1];
@@ -2720,6 +2757,9 @@ class GapBarrier
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
 				double opttime2=ros::Time::now().toSec();
 				printf("OptTime: %lf, Evals: %d\n",opttime2-opttime1,nlopt_get_numevals(opt));
+				// FILE *file1w = fopen("/home/gjsk/nav_opt_results.txt", "a");
+				// fprintf(file1w,"%lf,%lf\n",simx,simy);
+				// fclose(file1w);
 
 				if(isnan(minf)){
 					forcestop=1;
@@ -2744,6 +2784,46 @@ class GapBarrier
 					}
 					
 					last_delta=deltas[1];
+					
+					// if(counter==155){
+					// 	FILE *file1w = fopen("/home/gjsk/nav_opt_results.txt", "a");
+					// 	FILE *file1r = fopen("/home/gjsk/lidar_scan_results.txt", "a");
+					// 	for(int mi=0;mi<nMPC*kMPC;mi++){
+					// 		fprintf(file1w,"%lf,%lf,%lf,%lf\n",x_vehicle[mi],y_vehicle[mi],thetas[mi],deltas[mi]);
+					// 	}
+					// 	for (int mi=0;mi<nMPC;mi++){
+					// 		fprintf(file1w,"%lf,%lf\n",startxplot[mi],startyplot[mi]);
+					// 		fprintf(file1w,"%lf,%lf\n",xptplot[mi],yptplot[mi]);
+					// 	}
+
+					// 	std::vector<std::vector<double>> lidar_sampled_pts;
+					// 	lidar_sampled_pts.insert(lidar_sampled_pts.end(), obstacle_points_l_MPC.begin(), obstacle_points_l_MPC.end());
+
+					// 	lidar_sampled_pts.insert(lidar_sampled_pts.end(), obstacle_points_r_MPC.begin(), obstacle_points_r_MPC.end());
+
+					// 	std::vector<std::vector<double>> sub_pts;
+					// 	for(int mi=0;mi<lidar_sampled_pts.size();mi++){
+					// 		int toolow=0;
+					// 		for(int ri=0;ri<sub_pts.size();ri++){
+					// 			if(sqrt(pow(lidar_sampled_pts[mi][0]-sub_pts[ri][0],2)+pow(lidar_sampled_pts[mi][1]-sub_pts[ri][1],2))<0.3){
+					// 				toolow=1;
+					// 			}
+
+					// 		}
+					// 		if(toolow==0){
+					// 			sub_pts.push_back(lidar_sampled_pts[mi]);
+					// 		}
+
+					// 	}
+
+					// 	for(int ri=0; ri<sub_pts.size();ri++){
+					// 		fprintf(file1r,"%lf,%lf\n",sub_pts[ri][0],sub_pts[ri][1]);
+					// 	}
+
+
+					// 	fclose(file1w);
+					// 	fclose(file1r);
+					// }
 				}
 				if(minf<5 && startcheck==0){
 					startcheck=1;
