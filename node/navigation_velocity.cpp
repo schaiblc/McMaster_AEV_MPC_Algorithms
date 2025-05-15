@@ -3104,22 +3104,30 @@ class GapBarrier
 							deltas[i+j*kMPC]=last_delta;
 						}
 						else if(i==1&&j==0){
-							if(theta_refs[j]>0){
-								deltas[i+j*kMPC]=std::min(last_delta+opt_params[2],max_steering_angle);
+							double thetanext=theta_refs[j];
+							while(thetanext>M_PI) thetanext-=2*M_PI;
+							while(thetanext<-M_PI) thetanext+=2*M_PI;
+							double ex_delta=atan((thetanext)*opt_params[1]/(opt_params[0]*max_speed/2));
+							if(thetanext>0){
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
 							}
-							else if(theta_refs[j]<0){
-								deltas[i+j*kMPC]=std::max(last_delta-opt_params[2],-max_steering_angle);
+							else if(thetanext<0){
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
 							}
 							else{
 								deltas[i+j*kMPC]=last_delta;
 							}
 						}
 						else{
-							if(theta_refs[j]>thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle);
+							double thetanext=theta_refs[j];
+							while(thetanext>thetas[i+j*kMPC]+M_PI) thetanext-=2*M_PI;
+							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
+							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/(opt_params[0]*max_speed/2));
+							if(thetanext>thetas[i+j*kMPC]){
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle));
 							}
-							else if(theta_refs[j]<thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle);
+							else if(thetanext<thetas[i+j*kMPC]){
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle));
 							}
 							else{
 								deltas[i+j*kMPC]=deltas[i+j*kMPC-1];
@@ -3446,6 +3454,9 @@ class GapBarrier
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
 					drive_msg.drive.speed = vel_adapt; //velocity_MPC
+					FILE *file1 = fopen("/home/gjsk/berlin_MPC.txt", "a");
+					fprintf(file1,"%lf, %lf\n",simx,simy);
+					fclose(file1);
 				}
 				else{
 					drive_msg.drive.speed = 0;
