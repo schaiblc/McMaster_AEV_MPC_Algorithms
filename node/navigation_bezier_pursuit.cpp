@@ -2690,10 +2690,10 @@ class GapBarrier
 						double map_yval=mapped_y+sin(mapped_theta)*xpt+cos(mapped_theta)*ypt;
 						for(int i=0;i<map_pts.size();i++){
 							if(pow(map_pts[i][0]-map_xval,2)+pow(map_pts[i][1]-map_yval,2)<pow(max_lidar_range_opt,2)){
-								double x_base=(map_pts[i][0]-locx)*cos(loctheta)-(map_pts[i][1]-locy)*sin(loctheta);
-								double y_base=(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
-								double x_fut=(x_base-xpt)*cos(theta_ref)-(y_base-ypt)*sin(theta_ref);
-								double y_fut=(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
+								double x_base=(map_pts[i][0]-locx)*cos(loctheta)+(map_pts[i][1]-locy)*sin(loctheta);
+								double y_base=-(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
+								double x_fut=(x_base-xpt)*cos(theta_ref)+(y_base-ypt)*sin(theta_ref);
+								double y_fut=-(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
 								double ang_base=atan2(y_fut,x_fut);
 								if (ang_base>M_PI) ang_base-=2*M_PI;
 								if (ang_base<-M_PI) ang_base+=2*M_PI;
@@ -3235,6 +3235,12 @@ class GapBarrier
 					x[4]=(1-pursuit_weight)*x[4]+pursuit_weight*bez_pts[1][4];
 					
 				}
+
+				x[0]=std::min(std::max(-max_lidar_range+1e-6,x[0]),max_lidar_range-1e-6); //x2
+				x[1]=std::min(std::max(-max_lidar_range+1e-6,x[1]),max_lidar_range-1e-6); //x3
+				x[2]=std::min(std::max(-max_lidar_range+1e-6,x[2]),max_lidar_range-1e-6); //y3
+				x[3]=std::min(std::max(-max_lidar_range+1e-6,x[3]),max_lidar_range-1e-6); //x4
+				x[4]=std::min(std::max(-max_lidar_range+1e-6,x[4]),max_lidar_range-1e-6); //y4
 
 
 				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
