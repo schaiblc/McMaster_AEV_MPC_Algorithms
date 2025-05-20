@@ -375,12 +375,14 @@ class GapBarrier
 		double veh_det_length=0;
 		double veh_det_width=0;
 
+		std::vector<std::vector<double>> save_map;
+		int callbackcount=0;
+
 		ros::Time timestamp_tf1; ros::Time timestamp_tf2;
 		ros::Time timestamp_cam1; ros::Time timestamp_cam2;
 
 		//imu
 		double imu_roll, imu_pitch, imu_yaw;
-
 
 		//mux
 		int nav_mux_idx; int nav_active; 
@@ -1966,6 +1968,7 @@ class GapBarrier
 			scan_beams = int(2*M_PI/data->angle_increment);
 			ls_str = int(round(scan_beams*right_beam_angle/(2*M_PI)));
 			ls_end = int(round(scan_beams*left_beam_angle/(2*M_PI)));
+			std::vector<std::vector<double>> save_map1;
 
 			//TODO: ADD TIME STUFF HERE
 			ros::Time t = ros::Time::now();
@@ -2245,7 +2248,7 @@ class GapBarrier
 
 			if(drive_state == "normal"){
 				std::vector<float> fused_ranges_MPC=fused_ranges;
-
+				callbackcount+=1;
 
 				double track_line[2][nMPC*kMPC]; //Tracking line a & b (assume c=1) parameters for all time intervals, additional terms for passing n & k
 				double theta_refs[nMPC]; //Reference angles for each time interval
@@ -2284,10 +2287,10 @@ class GapBarrier
 						double map_yval=mapped_y+sin(mapped_theta)*xpt+cos(mapped_theta)*ypt;
 						for(int i=0;i<map_pts.size();i++){
 							if(pow(map_pts[i][0]-map_xval,2)+pow(map_pts[i][1]-map_yval,2)<pow(max_lidar_range_opt,2)){
-								double x_base=(map_pts[i][0]-locx)*cos(loctheta)-(map_pts[i][1]-locy)*sin(loctheta);
-								double y_base=(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
-								double x_fut=(x_base-xpt)*cos(theta_ref)-(y_base-ypt)*sin(theta_ref);
-								double y_fut=(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
+								double x_base=(map_pts[i][0]-locx)*cos(loctheta)+(map_pts[i][1]-locy)*sin(loctheta);
+								double y_base=-(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
+								double x_fut=(x_base-xpt)*cos(theta_ref)+(y_base-ypt)*sin(theta_ref);
+								double y_fut=-(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
 								double ang_base=atan2(y_fut,x_fut);
 								if (ang_base>M_PI) ang_base-=2*M_PI;
 								if (ang_base<-M_PI) ang_base+=2*M_PI;
@@ -2397,6 +2400,46 @@ class GapBarrier
 						}
 
 					}
+					if(num_MPC==0 && odomx!=0){
+						for(int i=0; i<fused_ranges_MPC_tot.size();i++){
+							if(std::isfinite(fused_ranges_MPC_tot[i]) && std::isfinite(lidar_transform_angles_tot[i])){
+								double obx=fused_ranges_MPC_tot[i]*cos(lidar_transform_angles_tot[i]);
+								double oby=fused_ranges_MPC_tot[i]*sin(lidar_transform_angles_tot[i]);
+								double obsx=obx*cos(odomtheta)-oby*sin(odomtheta)+odomx;
+								double obsy=obx*sin(odomtheta)+oby*cos(odomtheta)+odomy;
+								int shortd=0;
+								for(int j=0;j<save_map.size();j++){
+									if(pow(obsx-save_map[j][0],2)+pow(obsy-save_map[j][1],2)<0.01){
+										shortd=1;
+									}
+								}
+								if(shortd==0){
+									save_map.push_back({obsx,obsy});
+									save_map1.push_back({obsx,obsy});
+								}
+							}
+							
+						}
+						FILE *file1w = fopen("/home/gjsk/1_sampled_map.txt", "a");
+						
+						for(int i=0;i<save_map1.size();i++){
+							fprintf(file1w,"%lf,%lf\n",save_map1[i][0],save_map1[i][1]);
+						}
+						fclose(file1w);
+					}
+
+					if(num_MPC==0){
+						double smallestdist=1000;
+						for(int i=0;i<fused_ranges_MPC_tot.size();i++){
+							if(fused_ranges_MPC_tot[i]<smallestdist){
+								smallestdist=fused_ranges_MPC_tot[i];
+							}
+						}
+						FILE *file1w = fopen("/home/gjsk/1_closest_ob.txt", "a");
+						fprintf(file1w,"%d,%lf\n",callbackcount,smallestdist);
+						fclose(file1w);
+					}
+
 
 					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot);
 					
@@ -2710,10 +2753,10 @@ class GapBarrier
 							while(thetanext<-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext)*opt_params[1]/opt_params[0]);
 							if(thetanext>0){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<0){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=last_delta;
@@ -2725,10 +2768,10 @@ class GapBarrier
 							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/opt_params[0]);
 							if(thetanext>thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=deltas[i+j*kMPC-1];
@@ -2757,6 +2800,12 @@ class GapBarrier
 				nlopt_result optim= nlopt_optimize(opt, x, &minf); //This runs the optimization
 				double opttime2=ros::Time::now().toSec();
 				printf("OptTime: %lf, Evals: %d\n",opttime2-opttime1,nlopt_get_numevals(opt));
+				FILE *file1wq = fopen("/home/gjsk/1_opt_time.txt", "a");
+				fprintf(file1wq,"%d,%lf\n",callbackcount,opttime2-opttime1);
+				fclose(file1wq);
+				FILE *file1wr = fopen("/home/gjsk/1_states.txt", "a");
+				fprintf(file1wr,"%d,%lf,%lf,%lf,%lf,%lf\n",callbackcount,odomx,odomy,odomtheta,last_delta,vel_adapt);
+				fclose(file1wr);
 				// FILE *file1w = fopen("/home/gjsk/nav_opt_results.txt", "a");
 				// fprintf(file1w,"%lf,%lf\n",simx,simy);
 				// fclose(file1w);
