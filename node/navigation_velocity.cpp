@@ -2591,10 +2591,10 @@ class GapBarrier
 						double map_yval=mapped_y+sin(mapped_theta)*xpt+cos(mapped_theta)*ypt;
 						for(int i=0;i<map_pts.size();i++){
 							if(pow(map_pts[i][0]-map_xval,2)+pow(map_pts[i][1]-map_yval,2)<pow(max_lidar_range_opt,2)){
-								double x_base=(map_pts[i][0]-locx)*cos(loctheta)-(map_pts[i][1]-locy)*sin(loctheta);
-								double y_base=(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
-								double x_fut=(x_base-xpt)*cos(theta_ref)-(y_base-ypt)*sin(theta_ref);
-								double y_fut=(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
+								double x_base=(map_pts[i][0]-locx)*cos(loctheta)+(map_pts[i][1]-locy)*sin(loctheta);
+								double y_base=-(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
+								double x_fut=(x_base-xpt)*cos(theta_ref)+(y_base-ypt)*sin(theta_ref);
+								double y_fut=-(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
 								double ang_base=atan2(y_fut,x_fut);
 								if (ang_base>M_PI) ang_base-=2*M_PI;
 								if (ang_base<-M_PI) ang_base+=2*M_PI;
@@ -3109,10 +3109,10 @@ class GapBarrier
 							while(thetanext<-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext)*opt_params[1]/(opt_params[0]*max_speed/2));
 							if(thetanext>0){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<0){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=last_delta;
@@ -3124,10 +3124,10 @@ class GapBarrier
 							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/(opt_params[0]*max_speed/2));
 							if(thetanext>thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=deltas[i+j*kMPC-1];
