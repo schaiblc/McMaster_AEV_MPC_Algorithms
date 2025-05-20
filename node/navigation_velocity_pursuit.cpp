@@ -2863,10 +2863,10 @@ class GapBarrier
 						double map_yval=mapped_y+sin(mapped_theta)*xpt+cos(mapped_theta)*ypt;
 						for(int i=0;i<map_pts.size();i++){
 							if(pow(map_pts[i][0]-map_xval,2)+pow(map_pts[i][1]-map_yval,2)<pow(max_lidar_range_opt,2)){
-								double x_base=(map_pts[i][0]-locx)*cos(loctheta)-(map_pts[i][1]-locy)*sin(loctheta);
-								double y_base=(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
-								double x_fut=(x_base-xpt)*cos(theta_ref)-(y_base-ypt)*sin(theta_ref);
-								double y_fut=(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
+								double x_base=(map_pts[i][0]-locx)*cos(loctheta)+(map_pts[i][1]-locy)*sin(loctheta);
+								double y_base=-(map_pts[i][0]-locx)*sin(loctheta)+(map_pts[i][1]-locy)*cos(loctheta);
+								double x_fut=(x_base-xpt)*cos(theta_ref)+(y_base-ypt)*sin(theta_ref);
+								double y_fut=-(x_base-xpt)*sin(theta_ref)+(y_base-ypt)*cos(theta_ref);
 								double ang_base=atan2(y_fut,x_fut);
 								if (ang_base>M_PI) ang_base-=2*M_PI;
 								if (ang_base<-M_PI) ang_base+=2*M_PI;
@@ -3414,7 +3414,7 @@ class GapBarrier
 				x_vehicle[0]=0;
 				y_vehicle[0]=0;
 				thetas[0]=0;
-				vel_vehicle[0]=vel_adapt;
+				vel_vehicle[0]=vel_adapt-1e-6;
 
 				//Try new attempt at initial guess
 				for (int j=0;j<nMPC;j++){
@@ -3428,10 +3428,10 @@ class GapBarrier
 							while(thetanext<-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext)*opt_params[1]/(opt_params[0]*max_speed/2));
 							if(thetanext>0){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<0){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=last_delta;
@@ -3443,10 +3443,10 @@ class GapBarrier
 							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
 							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/(opt_params[0]*max_speed/2));
 							if(thetanext>thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle));
+								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle-1e-6));
 							}
 							else if(thetanext<thetas[i+j*kMPC]){
-								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle));
+								deltas[i+j*kMPC]=std::max(ex_delta,std::max(deltas[i+j*kMPC-1]-opt_params[2],-max_steering_angle+1e-6));
 							}
 							else{
 								deltas[i+j*kMPC]=deltas[i+j*kMPC-1];
@@ -3508,12 +3508,12 @@ class GapBarrier
 							ex_delta=car_detects[0].state[4];
 						}
 						if(theta_to_lead>thetasp[i]){
-							if(i==0) deltasp[i]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle));
-							else deltasp[i]=std::min(ex_delta,std::min(deltasp[i-1]+opt_params[2],max_steering_angle));
+							if(i==0) deltasp[i]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
+							else deltasp[i]=std::min(ex_delta,std::min(deltasp[i-1]+opt_params[2],max_steering_angle-1e-6));
 						}
 						else if(theta_to_lead<thetasp[i]){
-							if(i==0) deltasp[i]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle));
-							else deltasp[i]=std::max(ex_delta,std::max(deltasp[i-1]-opt_params[2],-max_steering_angle));
+							if(i==0) deltasp[i]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle+1e-6));
+							else deltasp[i]=std::max(ex_delta,std::max(deltasp[i-1]-opt_params[2],-max_steering_angle+1e-6));
 						}
 						else{
 							deltasp[i]=0;
@@ -3546,31 +3546,31 @@ class GapBarrier
 					double delta_act[nMPC*kMPC]; double vel_act[nMPC*kMPC];
 					for(int i=0;i<nMPC*kMPC-2; i++){
 						vel_act[i]=sqrt(pow(x_veh_av[i+1]-x_veh_av[i],2)+pow(y_veh_av[i+1]-y_veh_av[i],2))/opt_params[0];
-						vel_act[i]=std::max(std::max(min_speed,vel_act[i]),1e-2);
+						vel_act[i]=std::max(std::max(min_speed+1e-6,vel_act[i]),1e-2);
 						delta_act[i]=atan(wheelbase/vel_act[i]/opt_params[0]*(thet_veh_av[i+1]-thet_veh_av[i]));
 						if(i>0){
 							if(delta_act[i]>delta_act[i-1]){
 								double plus_delta=delta_act[i-1]+opt_params[2];
-								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle);
+								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle-1e-6);
 							}
 							else{
 								double minus_delta=delta_act[i-1]-opt_params[2];
-								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle);
+								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle+1e-6);
 							}
 						}
 						else{
 							if(delta_act[i]>last_delta){
 								double plus_delta=last_delta+opt_params[2];
-								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle);	
+								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle-1e-6);	
 							}
 							else{
 								double minus_delta=last_delta-opt_params[2];
-								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle);
+								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle+1e-6);
 							}
 						}		
 					}
 					vel_act[nMPC*kMPC-2]=sqrt(pow(x_veh_av[nMPC*kMPC-1]-x_veh_av[nMPC*kMPC-2],2)+pow(y_veh_av[nMPC*kMPC-1]-y_veh_av[nMPC*kMPC-2],2))/opt_params[0];
-					vel_act[nMPC*kMPC-2]=std::max(std::max(min_speed,vel_act[nMPC*kMPC-2]),1e-2);
+					vel_act[nMPC*kMPC-2]=std::max(std::max(min_speed+1e-6,vel_act[nMPC*kMPC-2]),1e-2);
 					delta_act[nMPC*kMPC-2]=delta_act[nMPC*kMPC-3];	
 
 					vel_act[nMPC*kMPC-1]=vel_act[nMPC*kMPC-2];
@@ -3579,7 +3579,7 @@ class GapBarrier
 						vel_vehicle[i]=vel_act[i];
 						deltas[i]=delta_act[i];
 					}
-					vel_vehicle[0]=vel_adapt;
+					vel_vehicle[0]=vel_adapt-1e-6;
 					
 					//NOW GET THE X, Y AND THETA FROM THE DELTA_ACT AND VEL_ACT
 					for(int i=1;i<nMPC*kMPC;i++){
