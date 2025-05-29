@@ -2437,13 +2437,13 @@ class GapBarrier
 				// printf("Seems that once measurements get missed, can run into cases of states exploding\n");
 
 				// printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-				if(car_detects[q].state[3]>0.3){
-					std::cout << "State:\n" << car_detects[q].state << std::endl;
-					std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-					std::cout << "Pred State:\n" << pred_state << std::endl;
-					std::cout << "Measure:\n" << meas_vec << std::endl;
-					printf("%d\n",car_detects[q].miss_fr);
-				}
+				// if(car_detects[q].state[3]>0.3){
+				// 	std::cout << "State:\n" << car_detects[q].state << std::endl;
+				// 	std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
+				// 	std::cout << "Pred State:\n" << pred_state << std::endl;
+				// 	std::cout << "Measure:\n" << meas_vec << std::endl;
+				// 	printf("%d\n",car_detects[q].miss_fr);
+				// }
 
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
@@ -2570,7 +2570,7 @@ class GapBarrier
 						}
 						
 					}
-
+					
 					if(use_neural_net){ //Augment LIDAR with detected vehicle projected paths as well
 						std::vector<float> fused_ranges_MPC_veh_det;
 						std::vector<double> lidar_transform_angles_veh_det; //These are the additional ranges & angles from vehicle detections that will be sorted, included in obs calculations
@@ -2578,12 +2578,12 @@ class GapBarrier
 
 						for (int i=0; i<car_detects.size(); i++){
 							if(car_detects[i].init==2){
-								int start_track=0; int end_track=((nMPC-1)*kMPC+kMPC-1)*mult_factor; //Use all of the trajectpry in Bezier case
+								int start_track=0; int end_track=(int)(std::ceil(bez_t_end/std::max(default_dt,dt))-1.0)*mult_factor; //Use all of the trajectory in Bezier case
 								double track_x=car_detects[i].state[0]; double track_y=car_detects[i].state[1]; double track_theta=car_detects[i].state[2];
 								//Make a box for the vehicle based on orientation and have this projected path
 								//This ensures that the vehicle is more prominent in LIDAR detections and is more of a box as opposed to the mid-point
 								
-								for(int j=0; j<nMPC*kMPC*mult_factor; j++){
+								for(int j=0; j<(int)(std::ceil(bez_t_end/std::max(default_dt,dt)))*mult_factor; j++){
 									if(j>=start_track && j<=end_track){ //Only take this line segment timeframe of the MPC this round
 										int num_border=5; //Number of points along each border of the box
 
