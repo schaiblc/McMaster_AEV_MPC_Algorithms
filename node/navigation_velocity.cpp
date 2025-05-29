@@ -426,7 +426,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
 			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
 			grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
-			
+			grad[(4*i+3)*n+4*nMPC*kMPC+i]=1;
 		}
 		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
 		
@@ -480,7 +480,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
 		grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
 		grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
-		
+		grad[(4*i+1)*n+4*nMPC*kMPC+i]=1;
 	}
 	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
 	
