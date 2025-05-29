@@ -2732,12 +2732,12 @@ class GapBarrier
 
 						for (int i=0; i<car_detects.size(); i++){
 							if(car_detects[i].init==2){
-								int start_track=0; int end_track=((nMPC-1)*kMPC+kMPC-1)*mult_factor; //Use all of the trajectpry in Bezier case
+								int start_track=0; int end_track=(int)(std::ceil(bez_t_end/std::max(default_dt,dt))-1.0)*mult_factor; //Use all of the trajectpry in Bezier case
 								double track_x=car_detects[i].state[0]; double track_y=car_detects[i].state[1]; double track_theta=car_detects[i].state[2];
 								//Make a box for the vehicle based on orientation and have this projected path
 								//This ensures that the vehicle is more prominent in LIDAR detections and is more of a box as opposed to the mid-point
 								
-								for(int j=0; j<nMPC*kMPC*mult_factor; j++){
+								for(int j=0; j<(int)(std::ceil(bez_t_end/std::max(default_dt,dt)))*mult_factor; j++){
 									if(j>=start_track && j<=end_track){ //Only take this line segment timeframe of the MPC this round
 										int num_border=5; //Number of points along each border of the box
 
