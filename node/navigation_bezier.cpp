@@ -2920,7 +2920,7 @@ class GapBarrier
 				opt_params1.push_back(num_obs+3); opt_params1.push_back(bez_ctrl_pts); opt_params1.push_back(bez_curv_pts); opt_params1.push_back(bez_alpha); opt_params1.push_back(bez_x1); opt_params1.push_back(bez_y2);
 
 				opt_params2.push_back(num_obs+7); opt_params2.push_back(bez_ctrl_pts); opt_params2.push_back(bez_curv_pts); opt_params2.push_back(bez_beta); opt_params2.push_back(bez_x1); opt_params2.push_back(bez_y2);
-				opt_params2.push_back(max_speed); opt_params2.push_back(min_speed); opt_params2.push_back(max_accel); opt_params2.push_back(max_steering_angle); opt_params2.push_back(std::abs(max_servo_speed*std::max(default_dt,dt)));
+				opt_params2.push_back(max_speed); opt_params2.push_back(min_speed); opt_params2.push_back(max_accel); opt_params2.push_back(max_steering_angle); opt_params2.push_back(max_servo_speed);
 				opt_params2.push_back(bez_t_end); opt_params2.push_back(wheelbase); opt_params2.push_back(bez_min_dist);
 
 				for (int i=0; i<num_obs;i++){ //Add all subsampled obstacles to the parameters
