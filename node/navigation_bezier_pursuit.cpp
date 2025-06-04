@@ -3291,25 +3291,25 @@ class GapBarrier
 					bez_y4=x[4];
 					
 					//Integrate over curve until next sample to obtain v, delta
-					double dist_trav=0;
-					double dist_des=std::max(vel_adapt,min_speed)*std::max(default_dt,dt);
-					double t_des=0;
-					double last_x=0; double last_y=0;
-					for(int i=1; i<bez_curv_pts*100;i++){
-						double t=double(i)/double(bez_curv_pts*100-1);
-						double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
-						double new_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
+					// double dist_trav=0;
+					// double dist_des=std::max(vel_adapt,min_speed)*std::max(default_dt,dt);
+					// double t_des=0;
+					// double last_x=0; double last_y=0;
+					// for(int i=1; i<bez_curv_pts*100;i++){
+					// 	double t=double(i)/double(bez_curv_pts*100-1);
+					// 	double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
+					// 	double new_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
 						
-						dist_trav=dist_trav+pow(pow(new_x-last_x,2)+pow(new_y-last_y,2),0.5);
-						last_x=new_x; last_y=new_y;
+					// 	dist_trav=dist_trav+pow(pow(new_x-last_x,2)+pow(new_y-last_y,2),0.5);
+					// 	last_x=new_x; last_y=new_y;
 
-						if(dist_trav>dist_des){
-							t_des=t;
-							break;
-						}
-					}
+					// 	if(dist_trav>dist_des){
+					// 		t_des=t;
+					// 		break;
+					// 	}
+					// }
 					
-					double t= t_des;
+					double t= std::max(default_dt,dt)/bez_t_end;
 					double x_dot=4*bez_x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*x[3]*pow(t,3);
 					double x_ddot=4*bez_x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*x[3]*pow(t,2);
 					double x_dddot=4*bez_x1*(-24*t+18)+6*x[0]*(24*t-12)+4*x[1]*(-24*t+6)+24*x[3]*t;
