@@ -3054,13 +3054,13 @@ class GapBarrier
 
 				//Find the desired bezier control points for the leader trajectory
 				double bez_pts[2][5];
-				double turn_ang=0;
-				if(car_detects[0].state[4]<0){
-					turn_ang=std::min(-min_delta,car_detects[0].state[4]);
-				}
-				else turn_ang=std::max(min_delta,car_detects[0].state[4]);
-				double radius=std::abs(wheelbase/tan(turn_ang)); //Can't have div by 0 or inf radius
 				if(leader_detect==1){
+					double turn_ang=0;
+					if(car_detects[0].state[4]<0){
+						turn_ang=std::min(-min_delta,car_detects[0].state[4]);
+					}
+					else turn_ang=std::max(min_delta,car_detects[0].state[4]);
+					double radius=std::abs(wheelbase/tan(turn_ang)); //Can't have div by 0 or inf radius
 					double x_fin=radius*sin(bez_t_end*car_detects[0].state[3]/radius);
 					double y_fin=radius*(1.0-cos(bez_t_end*car_detects[0].state[3]/radius));
 					double ang_gap=bez_t_end*car_detects[0].state[3]/radius;
