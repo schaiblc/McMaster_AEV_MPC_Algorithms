@@ -3453,11 +3453,15 @@ class GapBarrier
 							}
 						}
 						if(i!=kMPC-1||j!=nMPC-1){
-							thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]*(max_speed/2)/opt_params[1]*tan(deltas[i+j*kMPC]);
+							if(i==0 && j==0){
+								thetas[1]=thetas[0]+opt_params[0]*vel_vehicle[0]/opt_params[1]*tan(deltas[0]);
+							}
+							else{
+								thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]*(max_speed/2)/opt_params[1]*tan(deltas[i+j*kMPC]);
+							}
 						}
 					}
 				}
-				thetas[1]=thetas[0]+opt_params[0]*vel_vehicle[0]/opt_params[1]*tan(deltas[0]);
 				for(int i=1;i<nMPC*kMPC;i++){
 					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
 					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
