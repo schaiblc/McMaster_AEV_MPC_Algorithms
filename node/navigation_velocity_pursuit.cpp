@@ -3550,9 +3550,9 @@ class GapBarrier
 					double delta_act[nMPC*kMPC]; double vel_act[nMPC*kMPC];
 					for(int i=0;i<nMPC*kMPC-2; i++){
 						vel_act[i]=sqrt(pow(x_veh_av[i+1]-x_veh_av[i],2)+pow(y_veh_av[i+1]-y_veh_av[i],2))/opt_params[0];
-						vel_act[i]=std::max(std::max(min_speed+1e-6,vel_act[i]),1e-2);
+						vel_act[i]=std::min(std::max(min_speed+1e-6,vel_act[i]),max_speed-1e-6);
 						delta_act[i]=atan(wheelbase/vel_act[i]/opt_params[0]*(thet_veh_av[i+1]-thet_veh_av[i]));
-						if(i>0){
+						if(i>1){
 							if(delta_act[i]>delta_act[i-1]){
 								double plus_delta=delta_act[i-1]+opt_params[2];
 								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle-1e-6);
@@ -3574,7 +3574,7 @@ class GapBarrier
 						}		
 					}
 					vel_act[nMPC*kMPC-2]=sqrt(pow(x_veh_av[nMPC*kMPC-1]-x_veh_av[nMPC*kMPC-2],2)+pow(y_veh_av[nMPC*kMPC-1]-y_veh_av[nMPC*kMPC-2],2))/opt_params[0];
-					vel_act[nMPC*kMPC-2]=std::max(std::max(min_speed+1e-6,vel_act[nMPC*kMPC-2]),1e-2);
+					vel_act[nMPC*kMPC-2]=std::min(std::max(min_speed+1e-6,vel_act[nMPC*kMPC-2]),max_speed-1e-6);
 					delta_act[nMPC*kMPC-2]=delta_act[nMPC*kMPC-3];	
 
 					vel_act[nMPC*kMPC-1]=vel_act[nMPC*kMPC-2];
@@ -3583,7 +3583,8 @@ class GapBarrier
 						vel_vehicle[i]=vel_act[i];
 						deltas[i]=delta_act[i];
 					}
-					vel_vehicle[0]=vel_adapt-1e-6;
+					vel_vehicle[0]=std::min(std::max(min_speed+1e-6,vel_adapt),max_speed-1e-6);
+					deltas[0]=last_delta;
 					
 					//NOW GET THE X, Y AND THETA FROM THE DELTA_ACT AND VEL_ACT
 					for(int i=1;i<nMPC*kMPC;i++){
