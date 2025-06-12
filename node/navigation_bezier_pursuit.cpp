@@ -2573,7 +2573,7 @@ class GapBarrier
 						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
 							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment
 								if(car_detects[q].state[0]>0){
-									if(tan(car_detects[q].state[4])/wheelbase*bez_t_end*car_detects[q].state[3]<2*M_PI){ //Doesn't complete full rotation of 2*PI over the future trajectory
+									if(std::abs(tan(car_detects[q].state[4])/wheelbase*bez_t_end*car_detects[q].state[3])<2*M_PI){ //Doesn't complete full rotation of 2*PI over the future trajectory
 										leader_detect=1; //Leader detected
 									}
 								}
