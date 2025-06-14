@@ -110,163 +110,60 @@ struct vehicle_detection
 
 double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //NLOPT cost function
 {
-	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
-	int cols = static_cast<int>(raw_data[0]);
-	double xopt[2][cols]; //2D array of tracking lines appended to some certain variables
-	for (int i = 0; i < cols; i++) {
-        xopt[0][i] = raw_data[2*i];
-        xopt[1][i] = raw_data[2*i + 1];
-    }
-
-	double start_x=xopt[1][0]; //Initial leader x pos, brought back by the distance we want to track behind
-	double start_y=xopt[0][1]; //Initial leader y pos, brought back by the distance we want to track behind
-	double lead_theta=xopt[1][1]; //Leader's initial theta
-	double lead_vel=xopt[0][2]; //Leader's constant velocity over traj
-	double radius=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
-	double pursuit_weight=xopt[0][3]; //Weighting of pursuit term vs middle line MPC
-	int leader_detect=static_cast<int>(xopt[1][3]); //Whether leader is detected or not
-	double step_time=xopt[0][4]; //Time of each callback or discrete step for our states
-	double min_pursue=xopt[1][4]; //Minimum distance allowed between pursuit and leader vehicle
-	double veh_det_length=xopt[0][5]; //Leader vehicle length, for constructing box around center point of vehicle
-	double veh_det_width=xopt[1][5]; //Leader vehicle width, for constructing box around center point of vehicle
-	double pursue_x=xopt[0][7]; //Desired lag in x, the distance we want to track behind
-	double pursue_y=xopt[1][7]; //Desired lag in y, the distance we want to track behind
-
 	//Gradient calculated based on three parts, d part, d_dot due to p_dot for both current and then next point (obj is only nonzero partial x & y)
-	double track_line[2][nMPC*kMPC];
-	for(int i=0;i<nMPC*kMPC;i++){
-		track_line[0][i]=xopt[0][i+8];
-		track_line[1][i]=xopt[1][i+8];
-	}
+	double (*track_line)[nMPC*kMPC] = (double (*)[nMPC*kMPC]) my_func_data; //track_line is now the normal double array
 	double funcreturn=0; //Create objective function as the sum of d and d_dot squared terms (d_dot part assumes constant w)
-	double d_factor=0.5; //Change weighting of d vs d_dot terms
-	double d_dot_factor=15;
+	double d_factor=1; //Change weighting of d vs d_dot terms
+	double d_dot_factor=30;
 	double delta_factor=0.1;
-	double vel_factor=0.1; //Scale importance of velocity term (constant v for no leader detection; min diff between ours, lead vel for OG MPC if detected; no term if pursuit)
-	double d_pursuit_factor=10;
-	double d_dot_pursuit_factor=1; //These are to scale base weightings wrt each other, when pursuit weight changes, will further change weighting distribution
-	
-	double func1=0;
-	double func2=0;
-	double func3=0;
-	double func4=0;
-	double func5=0;
-	double func6=0;
+	double vel_factor=0.1; //Scale importance of higher velocities (racing)
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
 		}
 	}
 	for (int i=0;i<nMPC*kMPC;i++){
-		funcreturn=funcreturn+(1-pursuit_weight)*d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-		func1=func1+(1-pursuit_weight)*d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-	
-		if(grad){
-			grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+(1-pursuit_weight)*d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-			grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+(1-pursuit_weight)*d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-		}
-		if(grad&&i>0){
-			grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+(1-pursuit_weight)*d_dot_factor*2*track_line[0][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
-			grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+(1-pursuit_weight)*d_dot_factor*2*track_line[1][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
-		}
-		if(i<nMPC*kMPC-1){
-			funcreturn=funcreturn+(1-pursuit_weight)*d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-			func2=func2+(1-pursuit_weight)*d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-			
-			if(grad){
-				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-(1-pursuit_weight)*d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-(1-pursuit_weight)*d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+			funcreturn=funcreturn+d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+			if(nanflag==0 && isnan(d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2))))){
+				printf("NAN1 %lf, %lf, %d\n",x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],i);
+				nanflag=1;
 			}
-		}
-
-		funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
-		func3=func3+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
-		
-		if(grad){ //Prioritize lower steering angle magnitudes
-			grad[i]=0; //Gradients wrt theta = 0
-			grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
-		}
-
-		if(leader_detect==0 && i<nMPC*kMPC-1){ //Minimize change in vel if no detection
-			funcreturn=funcreturn+vel_factor*pow(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i],2);
-			func4=func4+vel_factor*pow(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i],2);
 			if(grad){
-				grad[4*nMPC*kMPC+i]=-vel_factor*2*(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]);
-				grad[4*nMPC*kMPC+i+1]=vel_factor*2*(x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]);
+				grad[2*nMPC*kMPC+i]=d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
+				grad[3*nMPC*kMPC+i]=d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
 			}
-		}
-		else if(leader_detect==1){ //Minimize diff in vel wrt leader's vel if following OG MPC, for pursuit, disregard since we may need to speed, slow to pursue
-			funcreturn=funcreturn+(1-pursuit_weight)*vel_factor*pow(x[4*nMPC*kMPC+i]-lead_vel,2);
-			func4=func4+(1-pursuit_weight)*vel_factor*pow(x[4*nMPC*kMPC+i]-lead_vel,2);
-			if(grad){
-				grad[4*nMPC*kMPC+i]=(1-pursuit_weight)*vel_factor*2*(x[4*nMPC*kMPC+i]-lead_vel);
+			if(grad&&i>0){
+				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_factor*2*track_line[0][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
+				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_dot_factor*2*track_line[1][i-1]*(track_line[0][i-1]*(x[2*nMPC*kMPC+i]-x[2*nMPC*kMPC+i-1])+track_line[1][i-1]*(x[3*nMPC*kMPC+i]-x[3*nMPC*kMPC+i-1]))/(pow(track_line[0][i-1],2)+pow(track_line[1][i-1],2));
 			}
-		}
-
-		//Now, incorporate the pursuit terms
-		if(leader_detect==1){
-			double xl_og=radius*sin(lead_vel*step_time*i/radius);
-			double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accounting for theta rot
-			double xv_og=lead_vel*cos(lead_vel*step_time*i/radius);
-			double yv_og=lead_vel*sin(lead_vel*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
-
-			//Find the current heading of the vehicle to get the correct lagging pursuit x & y in base_link
-			double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
-			double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link frame (wrt our pursuit vehicle)
-
-			double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle		
-
-			double x_lead=start_x-(pursue_x*cos(thet_lead)-pursue_y*sin(thet_lead))+xl_og*cos(lead_theta)-yl_og*sin(lead_theta);
-			double y_lead=start_y-(pursue_x*sin(thet_lead)+pursue_y*cos(thet_lead))+xl_og*sin(lead_theta)+yl_og*cos(lead_theta); //future leader pos in base_link frame (wrt our pursuit vehicle)
-			
-			double rot_lagx=xv_og+lead_vel/radius*pursue_y;//Account for the angular change of the leader which affects our x, y lagging positions and velocities
-			double rot_lagy=yv_og-lead_vel/radius*pursue_x;
-			x_lead_d=rot_lagx*cos(lead_theta)-rot_lagy*sin(lead_theta);
-			y_lead_d=rot_lagx*sin(lead_theta)+rot_lagy*cos(lead_theta);
-
-			funcreturn=funcreturn+d_pursuit_factor*pursuit_weight*(pow(x[2*nMPC*kMPC+i]-x_lead,2)+pow(x[3*nMPC*kMPC+i]-y_lead,2)); //d^2 pursuit term
-			func5=func5+d_pursuit_factor*pursuit_weight*(pow(x[2*nMPC*kMPC+i]-x_lead,2)+pow(x[3*nMPC*kMPC+i]-y_lead,2)); //d^2 pursuit term
-			
-			if(grad){
-				grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_pursuit_factor*pursuit_weight*2*(x[2*nMPC*kMPC+i]-x_lead);
-				grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_pursuit_factor*pursuit_weight*2*(x[3*nMPC*kMPC+i]-y_lead);
-			}
-			if(i<nMPC*kMPC-1){ //d_dot^2 pursuit term
-				double numer=pow((x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)+(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d),2);
-				double denom=pow(x[2*nMPC*kMPC+i]-x_lead,2)+pow(x[3*nMPC*kMPC+i]-y_lead,2);
-
-				funcreturn=funcreturn+d_dot_pursuit_factor*pursuit_weight*numer/denom;
-				func6=func6+d_dot_pursuit_factor*pursuit_weight*numer/denom;
-				double topp=0;
-				double botp=0;
-				//Gradient wrt x_i
-				topp=2*(x[2*nMPC*kMPC+i]-x_lead)*pow(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d,2)-2*pow(x[2*nMPC*kMPC+i]-x_lead,2)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d);
-				topp=topp+2*(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)*((x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)-(x[2*nMPC*kMPC+i]-x_lead));
-				botp=2*(x[2*nMPC*kMPC+i]-x_lead);
-				if(grad){
-					grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2); //Quotient Ruke
+			if(i<nMPC*kMPC-1){
+				funcreturn=funcreturn+d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+				if(nanflag==0 && isnan(d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)))){
+					printf("NAN2\n");
+					nanflag=1;
 				}
-				//Gradient wrt y_i
-				topp=2*(x[3*nMPC*kMPC+i]-y_lead)*pow(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d,2)-2*pow(x[3*nMPC*kMPC+i]-y_lead,2)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d);
-				topp=topp+2*(x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)*((x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)-(x[3*nMPC*kMPC+i]-y_lead));
-				botp=2*(x[3*nMPC*kMPC+i]-y_lead);
 				if(grad){
-					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
-				}
-				//Gradient wrt x_i+1
-				topp=2*pow(x[2*nMPC*kMPC+i]-x_lead,2)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)+2*(x[3*nMPC*kMPC+i]-y_lead)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)*(x[2*nMPC*kMPC+i]-x_lead);
-				botp=0;
-				if(grad){
-					grad[2*nMPC*kMPC+i+1]=grad[2*nMPC*kMPC+i+1]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
-				}
-				//Gradient wrt y_i+1
-				topp=2*pow(x[3*nMPC*kMPC+i]-y_lead,2)*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-y_lead_d)+2*(x[2*nMPC*kMPC+i]-x_lead)*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-x_lead_d)*(x[3*nMPC*kMPC+i]-y_lead);
-				botp=0;
-				if(grad){
-					grad[3*nMPC*kMPC+i+1]=grad[3*nMPC*kMPC+i+1]+d_dot_pursuit_factor*pursuit_weight*(topp*denom-botp*numer)/pow(denom,2);
+					grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
+					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 				}
 			}
-		}
+			funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
+			if(nanflag==0 && isnan(delta_factor*pow(x[nMPC*kMPC+i],2))){
+				printf("NAN3\n");
+				nanflag=1;
+			}
+			if(grad){ //Prioritize lower steering angle magnitudes
+				grad[i]=0; //Gradients wrt theta = 0
+				grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
+			}
+			funcreturn=funcreturn+vel_factor/pow(x[4*nMPC*kMPC+i],2); //Prioritize higher velocities
+			if(nanflag==0 && isnan(vel_factor/pow(x[4*nMPC*kMPC+i],2))){
+				printf("NAN4\n");
+				nanflag=1;
+			}
+			if(grad){
+				grad[4*nMPC*kMPC+i]=-vel_factor*2/pow(x[4*nMPC*kMPC+i],3);
+			}
 	}
 	// printf("%lf\n",funcreturn);
 	if(grad){
@@ -277,9 +174,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			}
 		}
 	}
-	printf("%lf, %lf, %lf\n",func1,func2,func3);
-	printf("%lf, %lf, %lf\n",func4,func5,func6);
-	printf("$$$$$\n");
+	
 	return funcreturn;
 }
 
@@ -479,9 +374,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		}
 		// printf("*************\n");
 		//Obstacle proximity dependency
-		double obs_count=0;
 		for(int j=0;j<cols-5;j++){
-			obs_count++;
 			double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
 			double theta1=atan2(-x[3*nMPC*kMPC+i]+xopt[1][j+5],-x[2*nMPC*kMPC+i]+xopt[0][j+5]);
 			double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
@@ -490,9 +383,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 			// 	printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf, %d\n",dist1, theta_diff, x[2*nMPC*kMPC+i], x[3*nMPC*kMPC+i], x[i], xopt[0][j+5], xopt[1][j+5], i);
 			// }
 			double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
-			// if(i==0){
-			// 	printf("%lf, %lf (%lf, %lf), %lf\n",dist1,theta_band,xopt[0][j+5],xopt[1][j+5],theta_diff);
-			// }
+			
 			result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
 			if(isnan(result[4*i+3])&&nanflag==0){
 				printf("VELNAN4\n");
@@ -521,33 +412,27 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 				grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
 				
 				if(nanflag==0&&isnan(grad[(4*i+3)*n+i])){
-					printf("GradVELNAN %lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
+					printf("%lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
 					nanflag=1;
 				}
 			
 			}
 		}
-		if(obs_count==0){ //No obstacles in range, ignore this constraint
-			result[4*i+3]=-10;
-
+		double d_min=-1/vel_beta*log(result[4*i+3]);
+		// if(i==0){
+		// 	printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
+		// }
+		if(grad){
+			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
+			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
+			grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
+			grad[(4*i+3)*n+4*nMPC*kMPC+i]=1;
 		}
-		else{
-			double d_min=-1/vel_beta*log(result[4*i+3]);
-			// if(i==0){
-			// 	printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
-			// }
-			if(grad){
-				grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
-				grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
-				grad[(4*i+3)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+i];
-				grad[(4*i+3)*n+4*nMPC*kMPC+i]=1;
-				
-			}
-			result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
-			if(isnan(result[4*i+3])&&nanflag==0){
-				printf("VELNAN4a\n");
-				nanflag=1;
-			}
+		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+		
+		if(isnan(result[4*i+3])&&nanflag==0){
+			printf("VELNAN4a\n");
+			nanflag=1;
 		}
 
 	}
@@ -565,9 +450,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		grad[(4*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 	}
 	// //Obstacle proximity dependency
-	double obs_count=0;
 	for(int j=0;j<cols-5;j++){
-		obs_count++;
 		double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
 		double theta1=atan2(-x[3*nMPC*kMPC+i]+xopt[1][j+5],-x[2*nMPC*kMPC+i]+xopt[0][j+5]);
 
@@ -592,23 +475,18 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 			grad[(4*i+1)*n+i]=grad[(4*i+1)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
 		}
 	}
-	if(obs_count==0){ //No obstacles in range, ignore constraint
-		result[4*i+1]=-10;
+	double d_min=-1/vel_beta*log(result[4*i+1]);
+	if(grad){
+		grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
+		grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
+		grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
+		grad[(4*i+1)*n+4*nMPC*kMPC+i]=1;
 	}
-	else{
-		double d_min=-1/vel_beta*log(result[4*i+1]);
-		if(grad){
-			grad[(4*i+1)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+2*nMPC*kMPC+i];
-			grad[(4*i+1)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+3*nMPC*kMPC+i];
-			grad[(4*i+1)*n+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+1])*grad[(4*i+1)*n+i];
-			grad[(4*i+1)*n+4*nMPC*kMPC+i]=1;
-		}
-		result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
-		
-		if(isnan(result[4*i+1])&&nanflag==0){
-			printf("VELNAN4d\n");
-			nanflag=1;
-		}
+	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
+	
+	if(isnan(result[4*i+1])&&nanflag==0){
+		printf("VELNAN4d\n");
+		nanflag=1;
 	}
 	if(grad){
 		for(int i=0; i<n*m;i++){
@@ -621,96 +499,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 }
 
-void pursuit_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* my_func_data){ //Pursuit inequality
-	double* raw_data = static_cast<double*>(my_func_data); //First extract as 1D array to get the column count (first value passed)
-	int cols = static_cast<int>(raw_data[0]);
-	double xopt[2][cols]; //2D array of tracking lines appended to some certain variables
-	for (int i = 0; i < cols; i++) {
-		xopt[0][i] = raw_data[2*i];
-		xopt[1][i] = raw_data[2*i + 1];
-	    }
-
-	double start_x=xopt[1][0]; //Initial leader x pos, brought back by the distance we want to track behind
-	double start_y=xopt[0][1]; //Initial leader y pos, brought back by the distance we want to track behind
-	double lead_theta=xopt[1][1]; //Leader's initial theta
-	double lead_vel=xopt[0][2]; //Leader's constant velocity over traj
-	double radius=xopt[1][2]; //Radius of circle arc of leader, + or - to account for delta + or -
-	double pursuit_weight=xopt[0][3]; //Weighting of pursuit term vs middle line MPC
-	int leader_detect=static_cast<int>(xopt[1][3]); //Whether leader is detected or not
-	double step_time=xopt[0][4]; //Time of each callback or discrete step for our states
-	double min_pursue=xopt[1][4]; //Minimum distance allowed between pursuit and leader vehicle
-	double veh_det_length=xopt[0][5]; //Leader vehicle length, for constructing box around center point of vehicle
-	double veh_det_width=xopt[1][5]; //Leader vehicle width, for constructing box around center point of vehicle
-	double vel_beta=xopt[0][6]; //Soft min smoothing constant
-	
-	double track_line[2][nMPC*kMPC];
-	for(int i=0;i<nMPC*kMPC;i++){
-		track_line[0][i]=xopt[0][i+8];
-		track_line[1][i]=xopt[1][i+8];
-	}
-
-	if(result){
-		for(int i=0;i<m;i++){
-			result[i]=0;
-		}
-	}
-
-	if(grad){
-		for(int i=0;i<n*m;i++){
-			grad[i]=0;
-		}
-	}
-
-	//Find softmin dist between follower, leader vehicles over all time steps in the trajectory & for the four corners of the vehicle box
-	//Each point along trajectory has four points, the gradient wrt x_i & y_i only involves numerator terms at that time step. Others wrt x_i, y_i = 0 so ignore
-	double sum_dist=0;
-	double curdist=0;
-	double mindist=100;
-	for(int i=0;i<nMPC*kMPC;i++){ //Just one, big softmin distance constraint
-		double xl_og=radius*sin(lead_vel*step_time*i/radius);
-		double yl_og=radius*(1-cos(lead_vel*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
-		double xv_og=lead_vel*cos(lead_vel*step_time*i/radius);
-		double yv_og=lead_vel*sin(lead_vel*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
-
-		double x_lead=start_x+xl_og*cos(lead_theta)-yl_og*sin(lead_theta);
-		double y_lead=start_y+xl_og*sin(lead_theta)+yl_og*cos(lead_theta); //future leader pos in base_link frame (wrt our pursuit vehicle)
-		double x_lead_d=xv_og*cos(lead_theta)-yv_og*sin(lead_theta);
-		double y_lead_d=xv_og*sin(lead_theta)+yv_og*cos(lead_theta); //future leader vel in base_link fram (wrt our pursuit vehicle)
-		
-		double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle for the four box corners
-		double lead_ptsx[4]; double lead_ptsy[4];
-		lead_ptsx[0]=x_lead+veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[0]=y_lead+veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
-		lead_ptsx[1]=x_lead+veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[1]=y_lead+veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
-		lead_ptsx[2]=x_lead-veh_det_length/2*cos(thet_lead)-veh_det_width/2*sin(thet_lead); lead_ptsy[2]=y_lead-veh_det_length/2*sin(thet_lead)+veh_det_width/2*cos(thet_lead);
-		lead_ptsx[3]=x_lead-veh_det_length/2*cos(thet_lead)+veh_det_width/2*sin(thet_lead); lead_ptsy[3]=y_lead-veh_det_length/2*sin(thet_lead)-veh_det_width/2*cos(thet_lead);
-		//Sum distance for this point, find the numerator at least for this gradient wrt x_i & y_i
-		for(int j=0;j<4;j++){
-			curdist=sqrt(pow(x[2*nMPC*kMPC+i]-lead_ptsx[j],2)+pow(x[3*nMPC*kMPC+i]-lead_ptsy[j],2));
-			sum_dist+=exp(-vel_beta*curdist);
-
-			if(curdist<mindist){
-				mindist=curdist;
-			}
-			// if(curdist<0.1){
-			// 	ROS_ERROR("%d, %d, %lf, %lf -- %lf %lf | %lf\n",i,j,x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],lead_ptsx[j],lead_ptsy[j],curdist);
-			// }
-			if(grad){
-				grad[2*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[2*nMPC*kMPC+i]-lead_ptsx[j])/curdist;
-				grad[3*nMPC*kMPC+i]+=exp(-vel_beta*curdist)*(x[3*nMPC*kMPC+i]-lead_ptsy[j])/curdist;
-			}
-		}	
-		// printf("%d %lf, %lf - - -%lf, %lf | %lf\n",i,x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],x_lead,y_lead,curdist);
-	}
-	for(int i=0;i<nMPC*kMPC;i++){
-		if(grad){
-			grad[2*nMPC*kMPC+i]=-grad[2*nMPC*kMPC+i]/sum_dist; //Divide numerator by summed denominator to get the appropriate grad for x_i, y_i
-			grad[3*nMPC*kMPC+i]=-grad[3*nMPC*kMPC+i]/sum_dist;
-		}
-	}
-	result[0]=1.0/double(vel_beta)*log(sum_dist)+min_pursue; //Final softmin for the distances along trajectory, either violates or doesn't vs min_pursue
-	
-	// printf("PURSUITDIST %lf %lf %lf\n",1.0/double(vel_beta)*log(sum_dist),min_pursue,mindist);
-}
 
 
 class GapBarrier 
@@ -758,8 +546,6 @@ class GapBarrier
 		ros::Publisher robs;
 		ros::Publisher lobs1;
 		ros::Publisher robs1;
-		ros::Publisher startpts;
-		ros::Publisher leader_traj;
 		ros::Publisher vehicle_detect;
 		ros::Publisher driver_pub;
 		ros::Publisher cv_ranges_pub;
@@ -803,8 +589,6 @@ class GapBarrier
 		visualization_msgs::Marker robs_marker;
 		visualization_msgs::Marker lobs_marker1;
 		visualization_msgs::Marker robs_marker1;
-		visualization_msgs::Marker startpt_marker;
-		visualization_msgs::Marker pursuit_marker;
 		visualization_msgs::Marker vehicle_detect_path;
 
 		//steering & stop time
@@ -826,7 +610,6 @@ class GapBarrier
 		double max_speed=0;
 		double max_accel=0; //Max decel is set to equal
 		double vel_beta=0;
-		double pursuit_beta=0;
 		double theta_band_smooth=0;
 		double theta_band_diff=0;
 
@@ -843,23 +626,11 @@ class GapBarrier
 		int startcheck=0;
 		int forcestop=0;
 
-		//Leader-follower MPC pursuit params
-		double pursuit_weight=0;
-		int leader_detect=0;
-		double MPC_dist=0;
-		double pursuit_dist=0;
-		double transit_rate=0;
-		double min_pursue=0;
-		double min_delta=0;
-		double pursuit_x=0;
-		double pursuit_y=0;
-
 		double speed_to_erpm_gain, speed_to_erpm_offset;
 		double steering_angle_to_servo_gain, steering_angle_to_servo_offset;
 		std_msgs::Float64 last_servo_state;
 		double vel_adapt=1;
 		double stopped=0;
-		double stopped_msg=0;
 
 		double testx, testy, testtheta;
 
@@ -1022,7 +793,6 @@ class GapBarrier
 			nf.getParam("min_speed",min_speed);
 			nf.getParam("max_accel",max_accel); //Max decel set to equal
 			nf.getParam("bez_beta",vel_beta);
-			nf.getParam("pursuit_beta",pursuit_beta);
 			nf.getParam("theta_band_smooth",theta_band_smooth);
 			nf.getParam("theta_band_diff",theta_band_diff);
 			nf.getParam("obs_sep",obs_sep);
@@ -1062,15 +832,6 @@ class GapBarrier
 			meas_observability = Eigen::Matrix<double, 2, 5>::Zero();
 			meas_observability(0, 0) = 1;  // (1,1) in 1-based indexing
 			meas_observability(1, 1) = 1;  // (2,2) in 1-based indexing
-
-			//Leader-follower MPC pursuit
-			nf.getParam("MPC_dist", MPC_dist);
-			nf.getParam("pursuit_dist", pursuit_dist);
-			nf.getParam("transit_rate", transit_rate);
-			nf.getParam("min_pursue", min_pursue);
-			nf.getParam("min_delta", min_delta);
-			nf.getParam("pursuit_x", pursuit_x);
-			nf.getParam("pursuit_y", pursuit_y);
 
 			//timing
 			nf.getParam("stop_time1", stop_time1);
@@ -1136,8 +897,6 @@ class GapBarrier
 			robs=nf.advertise<visualization_msgs::Marker>("robs",2);
 			lobs1=nf.advertise<visualization_msgs::Marker>("lobs1",2);
 			robs1=nf.advertise<visualization_msgs::Marker>("robs1",2);
-			startpts=nf.advertise<visualization_msgs::Marker>("startpts",2);
-			leader_traj=nf.advertise<visualization_msgs::Marker>("leader_traj",2);
 			vehicle_detect=nf.advertise<visualization_msgs::Marker>("vehicle_detect",2);
 			driver_pub = nf.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
 
@@ -2522,7 +2281,6 @@ class GapBarrier
 			prev_time = current_time;
 			
 
-			leader_detect=0;
 
 			//Vehicle tracking even if we aren't currently driving
 			
@@ -2539,6 +2297,7 @@ class GapBarrier
 				else car_detects[q].miss_fr=0; //Found, reset consecutive missed frames to 0
 				
 			}
+
 			for(int q=0; q<car_detects.size();q++){ //Run the KF for every current detections here
 				// printf("%d: %lf\n",q,pow(pow(car_detects[q].meas[0],2)+pow(car_detects[q].meas[0],2),0.5));
 				// printf("%d, %d, %d, %d\n",car_detects[q].bound_box[0],car_detects[q].bound_box[1],car_detects[q].bound_box[2],car_detects[q].bound_box[3]);
@@ -2628,11 +2387,12 @@ class GapBarrier
 
 					car_detects[q].meas[0]=curmeasx; car_detects[q].meas[1]=curmeasy;
 				}
-				else{ //Using simulator for detections of other vehicles
+				else{
 					tempx=cos(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
 						sin(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
 					tempy=-sin(simtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-simx)+
 						cos(simtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-simy);
+
 					car_detects[q].state[0]=tempx; car_detects[q].state[1]=tempy; car_detects[q].state[2]=car_detects[q].state[2]-(simtheta-lasttheta);
 					while(car_detects[q].state[2]>M_PI) car_detects[q].state[2]-=2*M_PI;
 					while(car_detects[q].state[2]<-M_PI) car_detects[q].state[2]+=2*M_PI;
@@ -2731,26 +2491,9 @@ class GapBarrier
 				// 	printf("%d\n",car_detects[q].miss_fr);
 				// }
 
-				//Now, for the leader-follower MPC pursuit, determine if there is only one detection and it is being reasonably tracked
-				if(leader_detect==0){
-					// printf("%lf, %lf, %lf, %lf, %lf\n",car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-					if(car_detects[q].state[3]<3 && std::abs(car_detects[q].state[2])<M_PI/2){ //Reasonable velocity and oriented ahead, not pointing at us
-						if(std::abs(car_detects[q].state[4])<max_steering_angle){ //Detected delta has to be reasonable, within physical limits of vehicle
-							if(sqrt(pow(car_detects[q].state[0],2)+pow(car_detects[q].state[1],2))<max_lidar_range_opt){ //Within 5 m of us, more important for simulator environment 
-								if(car_detects[q].state[0]>0){ //Behind us, don't track since it's not leading
-									leader_detect=1; //Leader detected
-								}
-							}
-						}
-					}	
-				}
-				else{
-					leader_detect=-1; //More than 1 vehicle detected, don't pursue
-				}
 
 
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
-				
 			}
 
 			lastx=odomx; lasty=odomy; lasttheta=odomtheta; //Keep our vehicle frame from last cycle to transform frame to new this cycle
@@ -2758,16 +2501,14 @@ class GapBarrier
 			timestamp_tf2=timestamp_tf1; timestamp_cam2=timestamp_cam1;
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
 			// printf("**********************\n\n");
+
 			if (!nav_active ||(use_map && !map_saved)||stopped) { //Don't start navigation until map is saved if that's what we're using
 				drive_state = "normal";
-				if(stopped==1 && stopped_msg==0){
-					stopped_msg=1;
-					ROS_ERROR("Vehicle stopped since too close to obstacles. Restart to move again\n");
-				}
 				return;
 			}
 			
 			 
+
 
 			//pre-processing
 			// std::vector<double> double_data; double value;
@@ -2780,7 +2521,6 @@ class GapBarrier
 
 
 			std::vector<float> fused_ranges = data->ranges;
-			
 			// if(use_camera)
 			// {
 			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
@@ -2839,22 +2579,10 @@ class GapBarrier
 				std::vector<double> wc = {0.0, 0.0};
 				double mapped_x=locx, mapped_y=locy, mapped_theta=loctheta;
 
-				//Discard LIDAR scans close to the leader so that our LIDAR doesn't incorporate leader detections. These are handled separately
-				if(leader_detect==1){
-					for(int i=0; i<fused_ranges_MPC.size();i++){
-						double lidx=fused_ranges_MPC[i]*cos(lidar_transform_angles[i]);
-						double lidy=fused_ranges_MPC[i]*sin(lidar_transform_angles[i]);
-						
-						if(sqrt(pow(car_detects[0].state[0]-lidx,2)+pow(car_detects[0].state[1]-lidy,2))<veh_det_length){
-							fused_ranges_MPC[i]=max_lidar_range_opt*2; //Set range very large, effectively ignore
-						}
-					}
-				}
-
 				for (int num_MPC=0;num_MPC<nMPC;num_MPC++){
 					std::vector<float> fused_ranges_MPC_tot=fused_ranges_MPC;
 					std::vector<double> lidar_transform_angles_tot=lidar_transform_angles; //The cumulative ranges and angles for both map (if used) and lidar
-					
+
 					if(use_map){ //Augment LIDAR with map obstacle points too
 						std::vector<float> fused_ranges_MPC_map;
 						std::vector<double> lidar_transform_angles_map; //These are the additional ranges & angles from fixed map that will be sorted, included in obs calculations
@@ -2895,9 +2623,8 @@ class GapBarrier
 						}
 						
 					}
-					if(leader_detect<1) leader_detect=0;
 
-					if(use_neural_net && leader_detect==0){ //Augment LIDAR with detected vehicle projected paths as well, only if mutliple detects, not following
+					if(use_neural_net){ //Augment LIDAR with detected vehicle projected paths as well
 						std::vector<float> fused_ranges_MPC_veh_det;
 						std::vector<double> lidar_transform_angles_veh_det; //These are the additional ranges & angles from vehicle detections that will be sorted, included in obs calculations
 						int mult_factor=1; //This way, we get 2x amount of points for detections, improves the augmentation of LIDAR data
@@ -2935,8 +2662,7 @@ class GapBarrier
 												double edge_x=detection_corners[q][0]+(detection_corners[(q+1)%4][0]-detection_corners[q][0])*c1/num_border;
 												double edge_y=detection_corners[q][1]+(detection_corners[(q+1)%4][1]-detection_corners[q][1])*c1/num_border;
 												double tfed_ang=atan2(edge_y,edge_x);
-												if (tfed_ang>M_PI) tfed_ang-=2*M_PI;
-												if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
+												if (tfed_ang>M_PI) tfed_ang-=2*M_PI; if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
 												lidar_transform_angles_veh_det.push_back(tfed_ang);
 												fused_ranges_MPC_veh_det.push_back(pow(pow(edge_x,2)+pow(edge_y,2),0.5));
 												// printf("%d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,theta_ref, xpt, ypt, track_x, track_y, track_theta, tfed_x, tfed_y);
@@ -3328,53 +3054,15 @@ class GapBarrier
 				nlopt_set_lower_bound(opt, 0, 0);
 				nlopt_set_upper_bound(opt, 0, 0);
 
-				std::vector<double> opt_params_pursuit;
-				opt_params_pursuit.push_back(nMPC*kMPC+8); //Length of 1D params
-				if(leader_detect==1){ //Leader detected
-					opt_params_pursuit.push_back(car_detects[0].state[0]); //Our leader's starting trajectory in X
-					opt_params_pursuit.push_back(car_detects[0].state[1]); //And Y
-					opt_params_pursuit.push_back(car_detects[0].state[2]); //Leader's theta
-					opt_params_pursuit.push_back(car_detects[0].state[3]); //Leader's constant velocity over traj
-					double delta_lead=0;
-					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
-					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
-					double radius=wheelbase/tan(delta_lead);
-					opt_params_pursuit.push_back(radius); //Leader's circle arc (+ or -) radius, may need to use abs so we can use sign in some spots, abs radius other
-					opt_params_pursuit.push_back(pursuit_weight);
-				}
-				else{ //If no detection, do original MPC but still update the pursuit_weight in case we re-detect
-					opt_params_pursuit.push_back(0);
-					opt_params_pursuit.push_back(0);
-					opt_params_pursuit.push_back(0);
-					opt_params_pursuit.push_back(0);
-					opt_params_pursuit.push_back(0);
-					opt_params_pursuit.push_back(0);
-				}
-				opt_params_pursuit.push_back(leader_detect);
-				opt_params_pursuit.push_back(std::max(default_dt,dt)); //Time between discrete states, to convert the circle arc with vel of leader to discrete steps
-				opt_params_pursuit.push_back(min_pursue); //Minimum distance allowed between pursuit and leader vehicle
-				opt_params_pursuit.push_back(veh_det_length); //Leader vehicle length, for constructing box around center point of vehicle
-				opt_params_pursuit.push_back(veh_det_width); //Leader vehicle width, for constructing box around center point of vehicle
-				opt_params_pursuit.push_back(pursuit_beta);
-				opt_params_pursuit.push_back(0);
-				opt_params_pursuit.push_back(pursuit_x); //Our target to follow lagging trajectory in X
-				opt_params_pursuit.push_back(pursuit_y); //And Y
-
-				for(int i=0; i<nMPC*kMPC;i++){
-					opt_params_pursuit.push_back(track_line[0][i]);
-					opt_params_pursuit.push_back(track_line[1][i]);
-				}
-
 			
-				nlopt_set_min_objective(opt, myfunc, opt_params_pursuit.data());
+
+				nlopt_set_min_objective(opt, myfunc, &track_line);
 				double tol[nMPC*kMPC-1]={1e-8};
 				double tol1[2*nMPC*kMPC+1]={1e-8};
 				double tol2[4*nMPC*kMPC-2]={1e-8};
-				double tolp[1]={1e-8};
 				
 				
 				double opt_params[4]={std::max(default_dt,dt),wheelbase,std::abs(max_servo_speed*std::max(default_dt,dt)),last_delta};
-				
 
 				std::vector<double> opt_params_vel;
 
@@ -3399,13 +3087,6 @@ class GapBarrier
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol);
 				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC, delta_inequality_con, &opt_params, tol1);
 				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
-				if(leader_detect==1){
-					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_params_pursuit.data(), tolp);
-				}
-
-				//Next, test in different scenarios, tweak parameters in opt for balancing d, d_dot, OG MPC, pursuit, etc
-				//Sometimes the opt path goes way off. See why even in steady pursuit
-				//Why are we timing out on opt? Shouldn't happen when going straight along easy pursuit
 
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
@@ -3414,7 +3095,7 @@ class GapBarrier
 				x_vehicle[0]=0;
 				y_vehicle[0]=0;
 				thetas[0]=0;
-				vel_vehicle[0]=vel_adapt-1e-6;
+				vel_vehicle[0]=vel_adapt;
 
 				//Try new attempt at initial guess
 				for (int j=0;j<nMPC;j++){
@@ -3467,148 +3148,14 @@ class GapBarrier
 					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
 					vel_vehicle[i]=max_speed/2;
 				}
-				//For pursuit method, we now modify our starting guess to incorporate some dependency on a "good" pursuit path as well, weighted by pursuit_weight
-				//Find a pursuit path then average the x, y of this and our OG MPC paths to get the x & y of the starting guess
-				//Then, calculate the delta and vs from these but restrict them based on the physical limits of change and max/min
-				if(leader_detect==1){
-					double deltasp[nMPC*kMPC]; double thetasp[nMPC*kMPC]; double x_vehiclep[nMPC*kMPC]; double y_vehiclep[nMPC*kMPC]; double vel_vehiclep[nMPC*kMPC];
-					for(int i=0;i<nMPC*kMPC;i++){
-						vel_vehiclep[i]=car_detects[0].state[3];
-					}
-					x_vehiclep[0]=0; y_vehiclep[0]=0; thetasp[0]=0;
-					//Look at the current angle between us and the leader trajectory point at each interval, take the delta to push theta towards this value
-					double delta_lead=0;
-					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
-					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
-					double radius=wheelbase/tan(delta_lead);
-					double close_track=0;
-					for(int i=0; i<nMPC*kMPC; i++){
-						double xl_og=radius*sin(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius);
-						double yl_og=radius*(1-cos(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius)); //xlead, ylead before accoutning for theta rot
-						
-						//Find the current heading of the vehicle to get the correct lagging pursuit x & y in base_link
-						double xv_og=car_detects[0].state[3]*cos(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius);
-						double yv_og=car_detects[0].state[3]*sin(car_detects[0].state[3]*std::max(default_dt,dt)*i/radius); //x_vel, y_vel components before accounting for theta rot
 
-						double x_lead_d=xv_og*cos(car_detects[0].state[2])-yv_og*sin(car_detects[0].state[2]);
-						double y_lead_d=xv_og*sin(car_detects[0].state[2])+yv_og*cos(car_detects[0].state[2]); //future leader vel in base_link fram (wrt our pursuit vehicle)
-						
-						double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle
-		
-
-						double x_lead=car_detects[0].state[0]-(pursuit_x*cos(thet_lead)-pursuit_y*sin(thet_lead))+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
-						double y_lead=car_detects[0].state[1]-(pursuit_x*sin(thet_lead)+pursuit_y*cos(thet_lead))+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); //future leader pos in base_link frame (wrt our pursuit vehicle)
-
-						if(i==0 && sqrt(pow(x_lead-x_vehiclep[i],2)+pow(y_lead-y_vehiclep[i],2))<0.5){ //Close enough, just use the leader's steering angle as starting guess
-							close_track=1;
-						}
-
-						double theta_to_lead=atan2(y_lead-y_vehiclep[i],x_lead-x_vehiclep[i]);
-						
-						while(theta_to_lead>thetasp[i]+M_PI) theta_to_lead-=2*M_PI;
-						while(theta_to_lead<thetasp[i]-M_PI) theta_to_lead+=2*M_PI;
-						double ex_delta=atan((theta_to_lead-thetasp[i])*opt_params[1]/opt_params[0]/vel_vehiclep[i]);
-						if(close_track==1){
-							ex_delta=car_detects[0].state[4];
-						}
-						if(theta_to_lead>thetasp[i]){
-							if(i==0) deltasp[i]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
-							else deltasp[i]=std::min(ex_delta,std::min(deltasp[i-1]+opt_params[2],max_steering_angle-1e-6));
-						}
-						else if(theta_to_lead<thetasp[i]){
-							if(i==0) deltasp[i]=std::max(ex_delta,std::max(last_delta-opt_params[2],-max_steering_angle+1e-6));
-							else deltasp[i]=std::max(ex_delta,std::max(deltasp[i-1]-opt_params[2],-max_steering_angle+1e-6));
-						}
-						else{
-							deltasp[i]=0;
-						}
-						if(i==0) deltasp[i]=last_delta;
-						printf("%lf -> %lf w %lf\n",theta_to_lead,thetasp[i],deltasp[i]);
-
-						if(i<nMPC*kMPC-1){
-							x_vehiclep[i+1]=x_vehiclep[i]+opt_params[0]*vel_vehiclep[i]*cos(thetasp[i]);
-							y_vehiclep[i+1]=y_vehiclep[i]+opt_params[0]*vel_vehiclep[i]*sin(thetasp[i]);
-							thetasp[i+1]=thetasp[i]+opt_params[0]*vel_vehiclep[i]/opt_params[1]*tan(deltasp[i]);
-						}
-						
-						
-					}
-					//FILL IN THE REMAINDER OF THE FIND STARTING POINT LOGIC HERE, THEN COMBINE AND LIMIT INPUTS TO GET FINAL STARTING GUESS
-					double x_veh_av[nMPC*kMPC]; double y_veh_av[nMPC*kMPC]; double thet_veh_av[nMPC*kMPC];
-					x_veh_av[0]=0; y_veh_av[0]=0; thet_veh_av[0]=0;
-					printf("^^^^^^^^^^^^^^^^^^\n");
-					for(int i=1; i<nMPC*kMPC; i++){ //Now, we find the average x & y points based on pursuit_weight
-						x_veh_av[i]=(1-pursuit_weight)*x_vehicle[i]+pursuit_weight*x_vehiclep[i];
-						y_veh_av[i]=(1-pursuit_weight)*y_vehicle[i]+pursuit_weight*y_vehiclep[i];
-						thet_veh_av[i-1]=atan2(y_veh_av[i]-y_veh_av[i-1],x_veh_av[i]-x_veh_av[i-1]);
-						printf("%lf, %lf (%lf) PURS: %lf, %lf, %lf\n",x_vehicle[i], y_vehicle[i],pursuit_weight,x_vehiclep[i],y_vehiclep[i],thet_veh_av[i-1]);
-						if(i>1){
-							while(thet_veh_av[i-1]>thet_veh_av[i-2]+M_PI) thet_veh_av[i-1]-=2*M_PI;
-							while(thet_veh_av[i-1]<thet_veh_av[i-2]-M_PI) thet_veh_av[i-1]+=2*M_PI;
-						}
-					}
-					double delta_act[nMPC*kMPC]; double vel_act[nMPC*kMPC];
-					for(int i=0;i<nMPC*kMPC-2; i++){
-						vel_act[i]=sqrt(pow(x_veh_av[i+1]-x_veh_av[i],2)+pow(y_veh_av[i+1]-y_veh_av[i],2))/opt_params[0];
-						vel_act[i]=std::min(std::max(min_speed+1e-6,vel_act[i]),max_speed-1e-6);
-						delta_act[i]=atan(wheelbase/vel_act[i]/opt_params[0]*(thet_veh_av[i+1]-thet_veh_av[i]));
-						if(i>1){
-							if(delta_act[i]>delta_act[i-1]){
-								double plus_delta=delta_act[i-1]+opt_params[2];
-								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle-1e-6);
-							}
-							else{
-								double minus_delta=delta_act[i-1]-opt_params[2];
-								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle+1e-6);
-							}
-						}
-						else{
-							if(delta_act[i]>last_delta){
-								double plus_delta=last_delta+opt_params[2];
-								delta_act[i]=std::min(std::min(delta_act[i],plus_delta),max_steering_angle-1e-6);	
-							}
-							else{
-								double minus_delta=last_delta-opt_params[2];
-								delta_act[i]=std::max(std::max(delta_act[i],minus_delta),-max_steering_angle+1e-6);
-							}
-						}		
-					}
-					vel_act[nMPC*kMPC-2]=sqrt(pow(x_veh_av[nMPC*kMPC-1]-x_veh_av[nMPC*kMPC-2],2)+pow(y_veh_av[nMPC*kMPC-1]-y_veh_av[nMPC*kMPC-2],2))/opt_params[0];
-					vel_act[nMPC*kMPC-2]=std::min(std::max(min_speed+1e-6,vel_act[nMPC*kMPC-2]),max_speed-1e-6);
-					delta_act[nMPC*kMPC-2]=delta_act[nMPC*kMPC-3];	
-
-					vel_act[nMPC*kMPC-1]=vel_act[nMPC*kMPC-2];
-					delta_act[nMPC*kMPC-1]=delta_act[nMPC*kMPC-2];
-					for(int i=0;i<nMPC*kMPC;i++){
-						vel_vehicle[i]=vel_act[i];
-						deltas[i]=delta_act[i];
-					}
-					vel_vehicle[0]=std::min(std::max(min_speed+1e-6,vel_adapt),max_speed-1e-6);
-					deltas[0]=last_delta;
-					
-					//NOW GET THE X, Y AND THETA FROM THE DELTA_ACT AND VEL_ACT
-					for(int i=1;i<nMPC*kMPC;i++){
-						x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
-						y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
-						thetas[i]=thetas[i-1]+opt_params[0]*vel_vehicle[i-1]/opt_params[1]*tan(deltas[i-1]);
-					}
-					//These are our new, pursuit weighted starting guess values used below
-				}
-				printf("***************\n");
-				double x_start[nMPC*kMPC]; double y_start[nMPC*kMPC]; double thet_start[nMPC*kMPC]; double v_start[nMPC*kMPC]; double delt_start[nMPC*kMPC];
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
 					x[i]=thetas[i];
 					x[i+nMPC*kMPC]=deltas[i];
 					x[i+2*nMPC*kMPC]=x_vehicle[i];
 					x[i+3*nMPC*kMPC]=y_vehicle[i];
 					x[i+4*nMPC*kMPC]=vel_vehicle[i];
-					printf("Guess %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
-					//Save the starting guess for visualization if desired
-					x_start[i]=x_vehicle[i];
-					y_start[i]=y_vehicle[i];
-					thet_start[i]=thetas[i];
-					delt_start[i]=deltas[i];
-					v_start[i]=vel_vehicle[i];
+					// printf("Guess %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 				}
 				int successful_opt=0;
 
@@ -3640,7 +3187,7 @@ class GapBarrier
 						x_vehicle[i]=x[i+2*nMPC*kMPC];
 						y_vehicle[i]=x[i+3*nMPC*kMPC];
 						vel_vehicle[i]=x[i+4*nMPC*kMPC];
-						printf("Result %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
+						// printf("Result %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 					}
 					
 					last_delta=deltas[1];
@@ -3659,33 +3206,6 @@ class GapBarrier
 				startcheck=1;
 
 				nlopt_destroy(opt);
-				//Update the min_dist to weight middle-line MPC vs. pursuit of leader
-				//***************************************************************** */
-				if(successful_opt==1){
-					double min_dist=100;
-					for(int i=0;i<nMPC*kMPC;i++){
-						for(int j=0; j<num_obs;j++){
-							if(pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5)<min_dist){ //New min_dist along trajectory
-								min_dist=pow(pow(x_vehicle[i]-sub_obs[j][0],2)+pow(y_vehicle[i]-sub_obs[j][1],2),0.5);
-							}
-						}
-					}
-
-					double aval=2*transit_rate/(pursuit_dist-MPC_dist);
-					double bval=-transit_rate-2*transit_rate*MPC_dist/(pursuit_dist-MPC_dist);
-					double update_weight=aval*min_dist+bval; //Linear eqn for update weight
-					update_weight=std::min(std::max(-transit_rate,update_weight),transit_rate); //Clip at max transition rate
-					
-					pursuit_weight=pursuit_weight+update_weight; //Update pursuit weight term
-					pursuit_weight=std::min(std::max(0.0,pursuit_weight),1.0); //Clip at 0, 1
-					printf("Pursuit Weight %lf, %lf, %lf %lf\n",pursuit_weight,min_dist, update_weight, min_dist);
-					printf("Leader: %d\n",car_detects.size());
-					printf("%lf, %lf, %lf, %lf, %lf\n",car_detects[0].state[0],car_detects[0].state[1],car_detects[0].state[2],car_detects[0].state[3],car_detects[0].state[4]);
-					printf("Leader Detect: %d\n",leader_detect);
-				}
-
-				//***************************************************************** */
-				
 
 
 
@@ -3907,78 +3427,6 @@ class GapBarrier
 				robs1.publish(robs_marker1);
 
 
-				//Publish the left obstacle points
-				startpt_marker.header.frame_id = "base_link";
-				startpt_marker.header.stamp = ros::Time::now();
-				startpt_marker.type = visualization_msgs::Marker::POINTS;
-				startpt_marker.id = 0; 
-				startpt_marker.action = visualization_msgs::Marker::ADD;
-				startpt_marker.scale.x = 0.1;
-				startpt_marker.color.a = 1.0;
-				startpt_marker.color.r = 0.3; 
-				startpt_marker.color.g = 0.4;
-				startpt_marker.color.b = 0.8;
-				if(leader_detect==1){
-					startpt_marker.color.b = 0.1;
-				}
-				startpt_marker.pose.orientation.w = 1;
-				
-				startpt_marker.lifetime = ros::Duration(0.1);
-				geometry_msgs::Point p3a;
-				startpt_marker.points.clear();
-				for(int i=0;i<nMPC*kMPC-1;i++){
-					p3a.x = x_start[i];	p3a.y = y_start[i];	p3a.z = 0;
-					startpt_marker.points.push_back(p3a);	
-				}
-
-				startpts.publish(startpt_marker);
-
-
-				if(leader_detect==1){
-					pursuit_marker.header.frame_id = "base_link";
-					pursuit_marker.header.stamp = ros::Time::now();
-					pursuit_marker.type = visualization_msgs::Marker::POINTS;
-					pursuit_marker.id = 0; 
-					pursuit_marker.action = visualization_msgs::Marker::ADD;
-					pursuit_marker.scale.x = 0.1;
-					pursuit_marker.color.a = 1.0;
-					pursuit_marker.color.r = 0.1; 
-					pursuit_marker.color.g = 0.7;
-					pursuit_marker.color.b = 0.9;
-					pursuit_marker.pose.orientation.w = 1;
-					
-					pursuit_marker.lifetime = ros::Duration(0.1);
-					geometry_msgs::Point p3b;
-					pursuit_marker.points.clear();
-					double step_time=std::max(default_dt,dt);
-					double delta_lead=0;
-					if(car_detects[0].state[4]<0) delta_lead=std::min(-min_delta,car_detects[0].state[4]); //Limit delta to prevent div by 0
-					else delta_lead=std::max(min_delta,car_detects[0].state[4]);
-					double radius=wheelbase/tan(delta_lead);
-					printf("Our Speed %lf Lead Speed %lf\n",vel_adapt,car_detects[0].state[3]);
-					for(int i=0;i<nMPC*kMPC;i++){
-						double xl_og=radius*sin(car_detects[0].state[3]*step_time*i/radius);
-						double yl_og=radius*(1-cos(car_detects[0].state[3]*step_time*i/radius)); //xlead, ylead before accoutning for theta rot
-
-						//Find the current heading of the vehicle to get the correct lagging pursuit x & y in base_link
-						double xv_og=car_detects[0].state[3]*cos(car_detects[0].state[3]*step_time*i/radius);
-						double yv_og=car_detects[0].state[3]*sin(car_detects[0].state[3]*step_time*i/radius); //x_vel, y_vel components before accounting for theta rot
-
-						double x_lead_d=xv_og*cos(car_detects[0].state[2])-yv_og*sin(car_detects[0].state[2]);
-						double y_lead_d=xv_og*sin(car_detects[0].state[2])+yv_og*cos(car_detects[0].state[2]); //future leader vel in base_link fram (wrt our pursuit vehicle)
-						
-						double thet_lead=atan2(y_lead_d,x_lead_d); //Can use x_vel, y_vel to get the theta and thus the orientation of the vehicle
-
-						double x_lead=car_detects[0].state[0]-(pursuit_x*cos(thet_lead)-pursuit_y*sin(thet_lead))+xl_og*cos(car_detects[0].state[2])-yl_og*sin(car_detects[0].state[2]);
-						double y_lead=car_detects[0].state[1]-(pursuit_x*sin(thet_lead)+pursuit_y*cos(thet_lead))+xl_og*sin(car_detects[0].state[2])+yl_og*cos(car_detects[0].state[2]); 
-						//future leader pos in base_link frame (wrt our pursuit vehicle)
-						p3b.x = x_lead;	p3b.y = y_lead;	p3b.z = 0;
-						pursuit_marker.points.push_back(p3b);	
-					}
-
-					leader_traj.publish(pursuit_marker);
-				}
-
 
 				//Ackermann Steering
 				
@@ -4000,7 +3448,6 @@ class GapBarrier
 				velocity_MPC = velocity_scale*vehicle_velocity; //Implement slowing if we near an obstacle
 
 				vel_adapt=std::max(std::min(vel_adapt,max_speed),min_speed);
-				printf("MINDIST: %lf\n",min_distance);
 				if(min_distance<stop_distance) {vel_adapt=0; stopped=1;}
 			}
 
@@ -4011,6 +3458,9 @@ class GapBarrier
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
 					drive_msg.drive.speed = vel_adapt; //velocity_MPC
+					FILE *file1 = fopen("/home/gjsk/berlin_MPC.txt", "a");
+					fprintf(file1,"%lf, %lf\n",simx,simy);
+					fclose(file1);
 				}
 				else{
 					drive_msg.drive.speed = 0;
@@ -4046,3 +3496,5 @@ int main(int argc, char **argv){
 		}
 
 }
+
+
