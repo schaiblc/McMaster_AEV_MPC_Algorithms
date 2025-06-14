@@ -214,11 +214,11 @@ void delta_inequality_con(unsigned m, double *result, unsigned n, const double* 
 		}
 
 	}
-	result[2*nMPC*kMPC-1]=x[nMPC*kMPC]-opt_params[3]; //opt_params[3] is the last delta (from previous iteration)
-	result[2*nMPC*kMPC]=-x[nMPC*kMPC]+opt_params[3]; //Can't change servo instantly so delta[0] is fixed
+	result[2*nMPC*kMPC-2]=x[nMPC*kMPC]-opt_params[3]; //opt_params[3] is the last delta (from previous iteration)
+	result[2*nMPC*kMPC-1]=-x[nMPC*kMPC]+opt_params[3]; //Can't change servo instantly so delta[0] is fixed
 	if(grad){
-		grad[(2*nMPC*kMPC-1)*n+nMPC*kMPC]=1;
-		grad[(2*nMPC*kMPC)*n+nMPC*kMPC]=-1;
+		grad[(2*nMPC*kMPC-2)*n+nMPC*kMPC]=1;
+		grad[(2*nMPC*kMPC-1)*n+nMPC*kMPC]=-1;
 	}
 
 }
@@ -2733,7 +2733,7 @@ class GapBarrier
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, theta_equality_con, &opt_params, tol);
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, x_equality_con, &opt_params, tol);
 				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol);
-				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC+1, delta_inequality_con, &opt_params, tol1);
+				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC, delta_inequality_con, &opt_params, tol1);
 
 			
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
