@@ -1,5 +1,5 @@
 # This Repo contains the source code used for implementation of the STLMPC, QBMPC, P-STLMPC & P-QBMPC algorithms
-<!-- Add respective publications -->
+<!-- Add respective publications, brief descriptions -->
 
 * The navigation nodes for each of the listed algorithms are provided in the node directory.
 * The f1tenth_simulator framework for ROS1 (https://github.com/f1tenth/f1tenth_simulator) was used for implementation of these local path planning techniques.
