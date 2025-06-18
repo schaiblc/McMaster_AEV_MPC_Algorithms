@@ -10,7 +10,7 @@ A fourth order Bezier curve is used for simultaneous path planning and control, 
 These adaptive pursuit algorithms extend the prior algorithms to the case of cooperative multi-vehicle navigation in a modular leader-follower scheme which can be extended to more complex fleet formations with more vehicles. Objective terms that achieve both safe navigation and pursuit in arbitrary formation are used and weighted dynamically based on the nearest obstacle proximity to the predicted trajectory over time. This process also requires detections via YOLO and tracking via EKF where a minimum following distance is maintained between vehicles for safety. No fixed leader is required, inter-vehicle communication does not occur and thus, vehicles can independently join or break formation dynamically subject to local environmental safety conditions.
 
 
-
+## Additional Notes
 * The navigation nodes for each of the listed algorithms are provided in the node directory.
 * The f1tenth_simulator framework for ROS1 (https://github.com/f1tenth/f1tenth_simulator) was used for implementation of these local path planning techniques.
 * Nonholonomic constraints are assumed according to the kinematic bicycle model, tunable parameters are given in params.yaml.
