@@ -1,1 +1,1 @@
-Add the custom trained YOLO v5 model to this directory for implementation of the path planning algorithms, considering dynamic obstacle avoidance and pursuit.
+Add the custom trained YOLO v5 model (included in release v1.0.0) to this directory for implementation of the path planning algorithms, considering dynamic obstacle avoidance and pursuit.
