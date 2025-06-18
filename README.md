@@ -7,6 +7,7 @@
 * AMCL localization can be enabled in params.yaml as can vehicle detection via YOLO for dynamic obstacle avoidance and vehicle pursuit.
 * The specific navigation algorithm used can be selected in the simulator.launch and experiment.launch files for testing in simulation and experimental environments respectively.
 * simulator.cpp can be modified to produce an arbitrary detected vehicle path in simulation for testing of dynamic obstacle avoidance and pursuit in simulation.
+* Operation should be first confirmed in simulation to mitigate the risk of vehicle damage while testing in experimentation.
 
 
 <!-- Include the YOLO CNN if possible -->
