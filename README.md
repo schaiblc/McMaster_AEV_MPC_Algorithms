@@ -21,6 +21,4 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 * The custom trained YOLO v5 model for MacAEV detection is provided in release v1.0.0 (https://github.com/schaiblc/McMaster_AEV_MPC_Algorithms/releases/tag/v1.0.0) with the appropriate .engine & .onnx files. These files are referenced by path in YOLO.py via ~/catkin_ws/src/f1tenth_simulator/learning_models/Custom_yolo5.engine & ~/catkin_ws/src/f1tenth_simulator/learning_models/yolov5CustomTrained.onnx for real-time inference.
 * Operation should be first confirmed in simulation to mitigate the risk of vehicle damage while testing in experimentation.
 
-
-<!-- Include the YOLO CNN if possible -->
 <!-- Include video of operation? Both simulation and experimental? -->
