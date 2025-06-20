@@ -204,15 +204,15 @@ DistanceLeft: 0.9
 DistanceRight: 0.9
 TrackWall: 0
 angle_bl: rad(270*pi/180)
-angle_al: rad(185*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
+angle_al: rad(200*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
 angle_br: rad(90*pi/180)
-angle_ar: rad(175*pi/180) #Changed from 175
+angle_ar: rad(160*pi/180) #Changed from 175
 n_pts_l: 100
 n_pts_r: 100
 tau: 0.1 
 k_d: 4.0 
 k_p: 3.5
-vehicle_velocity: 2.5
+vehicle_velocity: 1.5
 turn_velocity: 0.8
 velocity_zero: 0.3
 # Gap Following Algorithm Parameters
@@ -238,7 +238,7 @@ use_manual_fwd: 0 #Doesn't seem to work. The existing methods rely heavily on ac
 nMPC: 2
 kMPC: 8
 angle_thresh: 1
-map_thresh: 0.0
+map_thresh: 0.1
 use_map: 0
 
 yolo_rows: 480
