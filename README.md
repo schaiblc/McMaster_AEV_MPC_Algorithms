@@ -1,4 +1,4 @@
-# This repository contains the source code used for implementation of the STLMPC, QBMPC, P-STLMPC & P-QBMPC algorithms
+# This repository contains the source code used for implementation of the STLMPC, QBMPC, P-STLMPC & P-QBMPC algorithms which achieve local path planning in multi-vehicle environments while maintaining safety in the absence of a global planner and known goal location
 <!-- Add respective publications, brief descriptions -->
 ## STLMPC
 Successive local tracking lines are generated via QPs (https://github.com/liuq/QuadProgpp), then a nonlinear SLSQP solver (https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#slsqp) performs optimization over a future time horizon, yielding a predicted trajectory. The first free control inputs are applied and the process repeats each control step. Dynamic obstacle avoidance is integrated via a CNN based on the YOLO architecture where EKF tracking is integrated into path planning for multi-vehicle contexts. Both implementations of STLMPC assuming a constant velocity and varying velocity are given (the varying velocity scheme encourages higher speeds for racing).
