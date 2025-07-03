@@ -3,7 +3,20 @@
 ## STLMPC
 Successive local tracking lines are generated via QPs (https://github.com/liuq/QuadProgpp), then a nonlinear SLSQP solver (https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#slsqp) performs optimization over a future time horizon, yielding a predicted trajectory. The first free control inputs are applied and the process repeats each control step. Dynamic obstacle avoidance is integrated via a CNN based on the YOLO architecture where EKF tracking is integrated into path planning for multi-vehicle contexts. Both implementations of STLMPC assuming a constant velocity and varying velocity are given (the varying velocity scheme encourages higher speeds for racing).
 
-[![Navigation using STLMPC](https://img.youtube.com/vi/hOUxxvMQrGM/0.jpg)](https://www.youtube.com/watch?v=hOUxxvMQrGM)
+<table>
+  <tr>
+    <td>
+      <a href="https://www.youtube.com/watch?v=hOUxxvMQrGM">
+        <img src="https://img.youtube.com/vi/hOUxxvMQrGM/0.jpg" width="300">
+      </a>
+    </td>
+    <td>
+      <a href="https://www.youtube.com/watch?v=uKgcKcMBytk">
+        <img src="https://img.youtube.com/vi/uKgcKcMBytk/0.jpg" width="300">
+      </a>
+    </td>
+  </tr>
+</table>
 
 
 ## QBMPC
