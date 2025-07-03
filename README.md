@@ -7,12 +7,12 @@ Successive local tracking lines are generated via QPs (https://github.com/liuq/Q
   <tr>
     <td>
       <a href="https://www.youtube.com/watch?v=hOUxxvMQrGM">
-        <img src="https://img.youtube.com/vi/hOUxxvMQrGM/0.jpg" width="300">
+        <img src="https://img.youtube.com/vi/hOUxxvMQrGM/0.jpg" width="450">
       </a>
     </td>
     <td>
       <a href="https://www.youtube.com/watch?v=uKgcKcMBytk">
-        <img src="https://img.youtube.com/vi/uKgcKcMBytk/0.jpg" width="300">
+        <img src="https://img.youtube.com/vi/uKgcKcMBytk/0.jpg" width="450">
       </a>
     </td>
   </tr>
