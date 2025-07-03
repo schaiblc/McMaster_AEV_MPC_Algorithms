@@ -31,6 +31,24 @@ Successive local tracking lines are generated via QPs (https://github.com/liuq/Q
 ## QBMPC
 A fourth order Bezier curve is used for simultaneous path planning and control, removing the need for a tracking path. Now, a potential field function is used to avoid local obstacles and constraints on vehicle dynamics are directly incorporated into the curve's formulation. An arbitrary future time horizon can be used for path planning while maintaining the fixed parameterization of the Bezier curve. An SLSQP solver is again used for the nonlinear optimization and control inputs are derived from the curve shape (governed by the control points) and subsequently applied at each control step.
 
+**Use the clickable thumbnails below to see the QBMPC algorithm in action:**
+<table>
+  <tr>
+    <td>
+      <a href="https://www.youtube.com/watch?v=3j0edNW95D0">
+        <img src="https://img.youtube.com/vi/3j0edNW95D0/0.jpg" width="450">
+      </a>
+    </td>
+    <td>
+      <a href="https://www.youtube.com/watch?v=m4K5vlIFxEA">
+        <img src="https://img.youtube.com/vi/m4K5vlIFxEA/0.jpg" width="450">
+      </a>
+    </td>
+  </tr>
+</table>
+
+
+
 ## P-STLMPC & P-QBMPC
 These adaptive pursuit algorithms modify the prior algorithms to fit the case of cooperative multi-vehicle navigation in a modular leader-follower scheme which can be extended to more complex fleet formations with more vehicles. Objective terms that achieve both safe navigation and pursuit in arbitrary formation are used and weighted dynamically based on the nearest obstacle's proximity to the predicted trajectory over time. If the nearest obstacle proximity is low over a sustained time, safe navigation is prioritized; meanwhile, if the minimum obstacle proximity becomes high over a sustained period, increased license is granted to achieve pursuit in formation (where path safety based on nearby obstacles becomes less of a concern). This process also requires detections via YOLO and tracking via EKF where a minimum following distance is maintained between vehicles for safety, incorporated into the optimization which still uses the SLSQP solver. No fixed leader is required, inter-vehicle communication does not occur and thus, vehicles can independently join or break formation dynamically subject to local environmental safety conditions.
 
