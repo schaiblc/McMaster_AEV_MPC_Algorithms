@@ -3,6 +3,9 @@
 ## STLMPC
 Successive local tracking lines are generated via QPs (https://github.com/liuq/QuadProgpp), then a nonlinear SLSQP solver (https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#slsqp) performs optimization over a future time horizon, yielding a predicted trajectory. The first free control inputs are applied and the process repeats each control step. Dynamic obstacle avoidance is integrated via a CNN based on the YOLO architecture where EKF tracking is integrated into path planning for multi-vehicle contexts. Both implementations of STLMPC assuming a constant velocity and varying velocity are given (the varying velocity scheme encourages higher speeds for racing).
 
+[![Navigation using STLMPC](https://img.youtube.com/vi/hOUxxvMQrGM/0.jpg)](https://www.youtube.com/watch?v=hOUxxvMQrGM)
+
+
 ## QBMPC
 A fourth order Bezier curve is used for simultaneous path planning and control, removing the need for a tracking path. Now, a potential field function is used to avoid local obstacles and constraints on vehicle dynamics are directly incorporated into the curve's formulation. An arbitrary future time horizon can be used for path planning while maintaining the fixed parameterization of the Bezier curve. An SLSQP solver is again used for the nonlinear optimization and control inputs are derived from the curve shape (governed by the control points) and subsequently applied at each control step.
 
