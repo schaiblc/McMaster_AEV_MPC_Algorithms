@@ -52,6 +52,23 @@ A fourth order Bezier curve is used for simultaneous path planning and control, 
 ## P-STLMPC & P-QBMPC
 These adaptive pursuit algorithms modify the prior algorithms to fit the case of cooperative multi-vehicle navigation in a modular leader-follower scheme which can be extended to more complex fleet formations with more vehicles. Objective terms that achieve both safe navigation and pursuit in arbitrary formation are used and weighted dynamically based on the nearest obstacle's proximity to the predicted trajectory over time. If the nearest obstacle proximity is low over a sustained time, safe navigation is prioritized; meanwhile, if the minimum obstacle proximity becomes high over a sustained period, increased license is granted to achieve pursuit in formation (where path safety based on nearby obstacles becomes less of a concern). This process also requires detections via YOLO and tracking via EKF where a minimum following distance is maintained between vehicles for safety, incorporated into the optimization which still uses the SLSQP solver. No fixed leader is required, inter-vehicle communication does not occur and thus, vehicles can independently join or break formation dynamically subject to local environmental safety conditions.
 
+**Use the clickable thumbnails below to see the P-STLMPC & P-QBMPC algorithms in action:**
+<table>
+  <tr>
+    <td>
+      <a href="https://www.youtube.com/watch?v=49ws64lPL-c">
+        <img src="https://img.youtube.com/vi/49ws64lPL-c/0.jpg" width="450">
+      </a>
+    </td>
+    <td>
+      <a href="https://www.youtube.com/watch?v=zwTHNDGbHSE">
+        <img src="https://img.youtube.com/vi/zwTHNDGbHSE/0.jpg" width="450">
+      </a>
+    </td>
+  </tr>
+</table>
+
+
 
 ## Additional Notes
 * The navigation nodes for each of the listed algorithms are provided in the node directory.
@@ -64,4 +81,10 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 * The custom trained YOLO v5 model for MacAEV detection is provided in release v1.0.0 (https://github.com/schaiblc/McMaster_AEV_MPC_Algorithms/releases/tag/v1.0.0) with the appropriate .engine & .onnx files. These files are referenced by path in YOLO.py via ~/catkin_ws/src/f1tenth_simulator/learning_models/Custom_yolo5.engine & ~/catkin_ws/src/f1tenth_simulator/learning_models/yolov5CustomTrained.onnx for real-time inference.
 * Operation should be first confirmed in simulation to mitigate the risk of vehicle damage while testing in experimentation.
 
-<!-- Include video of operation? Both simulation and experimental? -->
+## Configurable Parameters
+**Separate into relevant parameter categories**
+| Parameter     | Description   | Default    |
+|:--------------|:--------------|------------|
+| A             | B             | C          |
+| D             | E             | F          |
+
