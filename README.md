@@ -20,7 +20,7 @@ Successive local tracking lines are generated via QPs (https://github.com/liuq/Q
   <tr>
     <td colspan="2" align="center">
       <a href="https://www.youtube.com/watch?v=yKPFWdbwx-4">
-        <img src="https://img.youtube.com/vi/yKPFWdbwx-4/0.jpg" width="425">
+        <img src="https://img.youtube.com/vi/yKPFWdbwx-4/0.jpg" width="400">
       </a>
     </td>
   </tr>
