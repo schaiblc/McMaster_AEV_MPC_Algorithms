@@ -191,7 +191,7 @@ Visualization Manager:
       Visual Enabled: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation/startpts
+      Marker Topic: /navigation_STLMPC/startpts
       Name: Marker
       Namespaces:
         {}
@@ -199,7 +199,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: false
-      Marker Topic: /navigation_bezier/lead_bez
+      Marker Topic: /navigation_QBMPC/lead_bez
       Name: Marker
       Namespaces:
         {}
@@ -207,7 +207,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation/leader_traj
+      Marker Topic: /navigation_STLMPC/leader_traj
       Name: Marker
       Namespaces:
         {}
@@ -215,7 +215,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_bezier/leader_traj
+      Marker Topic: /navigation_QBMPC/leader_traj
       Name: Marker
       Namespaces:
         {}
@@ -223,7 +223,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_bezier/start_mark
+      Marker Topic: /navigation_QBMPC/start_mark
       Name: Marker
       Namespaces:
         {}
@@ -231,7 +231,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation/wall_markers
+      Marker Topic: /navigation_STLMPC/wall_markers
       Name: Marker
       Namespaces:
         {}
@@ -239,7 +239,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation/mpc_markers
+      Marker Topic: /navigation_STLMPC/mpc_markers
       Name: Marker
       Namespaces:
         {}
@@ -247,7 +247,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation/vehicle_detect
+      Marker Topic: /navigation_STLMPC/vehicle_detect
       Name: Marker
       Namespaces:
         "": true
@@ -255,7 +255,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/wall_markers
+      Marker Topic: /navigation_STLMPC_vary_v/wall_markers
       Name: Marker
       Namespaces:
         {}
@@ -263,7 +263,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/mpc_markers
+      Marker Topic: /navigation_STLMPC_vary_v/mpc_markers
       Name: Marker
       Namespaces:
         {}
@@ -271,7 +271,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/vehicle_detect
+      Marker Topic: /navigation_STLMPC_vary_v/vehicle_detect
       Name: Marker
       Namespaces:
         {}
@@ -279,7 +279,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_bezier/vehicle_detect
+      Marker Topic: /navigation_QBMPC/vehicle_detect
       Name: Marker
       Namespaces:
         {}
@@ -287,7 +287,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_bezier/bez
+      Marker Topic: /navigation_QBMPC/bez
       Name: Marker
       Namespaces:
         {}
@@ -295,7 +295,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/lobs
+      Marker Topic: /navigation_STLMPC_vary_v/lobs
       Name: Marker
       Namespaces:
         {}
@@ -303,7 +303,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/robs
+      Marker Topic: /navigation_STLMPC_vary_v/robs
       Name: Marker
       Namespaces:
         {}
@@ -311,7 +311,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/lobs1
+      Marker Topic: /navigation_STLMPC_vary_v/lobs1
       Name: Marker
       Namespaces:
         {}
@@ -319,7 +319,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /navigation_velocity/robs1
+      Marker Topic: /navigation_STLMPC_vary_v/robs1
       Name: Marker
       Namespaces:
         {}
