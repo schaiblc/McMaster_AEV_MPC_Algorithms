@@ -16,7 +16,7 @@ MpcLocalPlannerROS:
     #   max_steering_rate: 2.0 # deactive bounds with zero
     type: "unicycle"
     unicycle:
-      max_vel_x: 2.5
+      max_vel_x: 1.5
       max_vel_x_backwards: 0
       max_vel_theta: 3.8
       acc_lim_x: 2.5 # deactive bounds with zero
@@ -89,6 +89,7 @@ MpcLocalPlannerROS:
     force_reinit_new_goal_angular: 1.57
     prefer_x_feedback: False
     publish_ocp_results: False
+    print_cpu_time: True
     
   ## Solver settings
   solver:
