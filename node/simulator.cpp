@@ -6,6 +6,7 @@
 #include <tf2/impl/utils.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
@@ -40,7 +41,6 @@
 #include <vector>
 
 
-
 using namespace racecar_simulator;
 
 class RacecarSimulator {
@@ -65,6 +65,9 @@ private:
     // The car state and parameters
     CarState state;
     Pose2D state_det; //State of the other vehicle detected
+    double detx=0;
+    double dety=0;
+    double dettheta=0;
     double previous_seconds;
     double scan_distance_to_base_link;
     double max_speed, max_steering_angle;
@@ -102,6 +105,7 @@ private:
     // Listen for updates to the pose
     ros::Subscriber pose_sub;
     ros::Subscriber pose_rviz_sub;
+    ros::Subscriber tf_sub;
 
     // Publish a scan, odometry, and imu data
     bool broadcast_transform;
@@ -130,7 +134,6 @@ private:
 
     std::vector<std::pair<double, double>> MPC_track;
 
-    int maxIndex = 0;
     int indx=0;
 
     // safety margin for collisions
@@ -171,8 +174,10 @@ public:
         move_base_client->waitForServer(ros::Duration(5.0));
 
         // Initialize car state and driving commands
-        state = {.x=0, .y=0, .theta=0, .velocity=0, .steer_angle=0.0, .angular_velocity=0.0, .slip_angle=0.0, .st_dyn=false};
-        state_det.x=2; state_det.y=-0.2; state_det.theta=0;
+        // state = {.x=0, .y=0, .theta=0, .velocity=0, .steer_angle=0.0, .angular_velocity=0.0, .slip_angle=0.0, .st_dyn=false};
+        // state_det.x=15; state_det.y=6.2; state_det.theta=0; //columbia
+        // state_det.x=2; state_det.y=-0.2; state_det.theta=0; //berlin
+        state_det.x=2; state_det.y=0.4; state_det.theta=0.1; //levinelobby
         start_time=ros::Time::now().toSec();
         accel = 0.0;
         steer_angle_vel = 0.0;
@@ -180,16 +185,6 @@ public:
         desired_steer_ang = 0.0;
         previous_seconds = ros::Time::now().toSec();
 
-        std::ifstream infile("/home/gjsk/berlin_MPC_clean.txt");  // Open the file
-        
-        double a, b;
-        while (infile >> a >> b) {
-            MPC_track.emplace_back(a, b);
-        }
-
-        infile.close();
-
-        maxIndex = MPC_track.size() - 1;
 
         // Get the topic names
         std::string drive_topic, map_topic, scan_topic, pose_topic, gt_pose_topic, explore_topic, 
@@ -294,6 +289,8 @@ public:
 
         // obstacle subscriber
         obs_sub = n.subscribe("/clicked_point", 1, &RacecarSimulator::obs_callback, this);
+
+        tf_sub = n.subscribe("/tf", 20, &RacecarSimulator::tf_callback, this);
 
         // get collision safety margin
         n.getParam("coll_threshold", thresh);
@@ -412,42 +409,77 @@ public:
 
         //Update state of vehicle detected and publish
         //////////////////////////////////////////////
-        double myvel=0.8;
+        double myvel=1.7;
         double timeoffset=0;
-        //Path to pursue for the berlin.yaml environment
-        // if(indx<=maxIndex){
-        //     state_det.x=MPC_track[indx].first;
-        //     state_det.y=MPC_track[indx].second;
-        //     state_det.theta=0;
+
+        //columbia map simulated trajectory for detected vehicle
+        // if(ros::Time::now().toSec()<start_time+60+timeoffset && ros::Time::now().toSec()>start_time+timeoffset){
+        //     state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
+        //     state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
+        //     if(ros::Time::now().toSec()>start_time+3+timeoffset && ros::Time::now().toSec()<start_time+100+timeoffset){
+        //         state_det.theta+=0.2*update_pose_rate;
+        //     }
+        //     // if(ros::Time::now().toSec()>start_time+10+timeoffset && ros::Time::now().toSec()<start_time+12+timeoffset){
+        //     //     state_det.theta-=0.2*update_pose_rate;
+        //     // }
+            
+        // }
+
+        //berlin map simulated trajectory for detected vehicle
+        // if(ros::Time::now().toSec()<start_time+60+timeoffset && ros::Time::now().toSec()>start_time+timeoffset){
+        //     state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
+        //     state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
+        //     if(ros::Time::now().toSec()>start_time+3+timeoffset && ros::Time::now().toSec()<start_time+10+timeoffset){
+        //         state_det.theta-=0.2*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+10+timeoffset && ros::Time::now().toSec()<start_time+12+timeoffset){
+        //         state_det.theta+=0.2*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+12+timeoffset && ros::Time::now().toSec()<start_time+16+timeoffset){
+        //         state_det.theta-=0.3*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+16+timeoffset && ros::Time::now().toSec()<start_time+20+timeoffset){
+        //         state_det.theta+=0.1*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+26+timeoffset && ros::Time::now().toSec()<start_time+30+timeoffset){
+        //         state_det.theta+=0.1*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+32+timeoffset && ros::Time::now().toSec()<start_time+35+timeoffset){
+        //         state_det.theta-=0.2*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+35+timeoffset && ros::Time::now().toSec()<start_time+42+timeoffset){
+        //         state_det.theta-=0.4*update_pose_rate;
+        //     }
+        //     if(ros::Time::now().toSec()>start_time+42+timeoffset && ros::Time::now().toSec()<start_time+42.5+timeoffset){
+        //         state_det.theta+=0.2*update_pose_rate;
+        //     }
 
         // }
+
+
+        //levinelobby map simulated trajectory for detected vehicle
         if(ros::Time::now().toSec()<start_time+60+timeoffset && ros::Time::now().toSec()>start_time+timeoffset){
             state_det.x+=myvel*update_pose_rate*cos(state_det.theta);
             state_det.y+=myvel*update_pose_rate*sin(state_det.theta);
-            if(ros::Time::now().toSec()>start_time+3+timeoffset && ros::Time::now().toSec()<start_time+10+timeoffset){
-                state_det.theta-=0.2*update_pose_rate;
-            }
-            if(ros::Time::now().toSec()>start_time+10+timeoffset && ros::Time::now().toSec()<start_time+12+timeoffset){
+            if(ros::Time::now().toSec()>start_time+1+timeoffset && ros::Time::now().toSec()<start_time+2+timeoffset){
                 state_det.theta+=0.2*update_pose_rate;
             }
-            if(ros::Time::now().toSec()>start_time+12+timeoffset && ros::Time::now().toSec()<start_time+16+timeoffset){
-                state_det.theta-=0.3*update_pose_rate;
+            if(ros::Time::now().toSec()>start_time+5+timeoffset && ros::Time::now().toSec()<start_time+8+timeoffset){
+                state_det.theta-=0.35*update_pose_rate;
             }
-            if(ros::Time::now().toSec()>start_time+16+timeoffset && ros::Time::now().toSec()<start_time+20+timeoffset){
-                state_det.theta+=0.1*update_pose_rate;
-            }
-            if(ros::Time::now().toSec()>start_time+26+timeoffset && ros::Time::now().toSec()<start_time+30+timeoffset){
-                state_det.theta+=0.1*update_pose_rate;
-            }
-            if(ros::Time::now().toSec()>start_time+32+timeoffset && ros::Time::now().toSec()<start_time+35+timeoffset){
+            if(ros::Time::now().toSec()>start_time+8+timeoffset && ros::Time::now().toSec()<start_time+11+timeoffset){
                 state_det.theta-=0.2*update_pose_rate;
             }
-            if(ros::Time::now().toSec()>start_time+35+timeoffset && ros::Time::now().toSec()<start_time+42+timeoffset){
-                state_det.theta-=0.4*update_pose_rate;
+            if(ros::Time::now().toSec()>start_time+11+timeoffset && ros::Time::now().toSec()<start_time+13+timeoffset){
+                state_det.theta+=0.15*update_pose_rate;
             }
-            if(ros::Time::now().toSec()>start_time+42+timeoffset && ros::Time::now().toSec()<start_time+42.5+timeoffset){
-                state_det.theta+=0.2*update_pose_rate;
+            if(ros::Time::now().toSec()>start_time+13.5+timeoffset && ros::Time::now().toSec()<start_time+23+timeoffset){
+                state_det.theta+=0.35*update_pose_rate;
             }
+            if(ros::Time::now().toSec()>start_time+23+timeoffset && ros::Time::now().toSec()<start_time+25+timeoffset){
+                state_det.theta-=0.15*update_pose_rate;
+            }
+            
 
         }
         
@@ -461,7 +493,7 @@ public:
 
         /// KEEP in sim
         // If we have a map, perform a scan
-        lidar_call++; //This is hard-coded to ensure LIDAR callback frequency is 10 Hz
+        lidar_call++; //This is hard-coded to ensure LIDAR callback frequency is 10 Hz, reflects physical experiment
         if(update_pose_rate!=0.01){
             ROS_INFO("Set update_pose_rate to 0.01 to ensure smooth pose update and fixed LIDAR callback fo 10 Hz");
         }
@@ -483,6 +515,38 @@ public:
             for (size_t i = 0; i < scan.size(); i++){
                 scan_[i] = scan[i];
             }
+
+            //For simulating the static detections of another vehicle via the box outline's corners
+
+            // std::vector<std::pair<float, float>> positions = {
+            //     {detx+0.25*cos(dettheta)+0.2*sin(dettheta), dety+0.25*sin(dettheta)-0.2*cos(dettheta)},
+            //     {detx+0.25*cos(dettheta)-0.2*sin(dettheta), dety+0.25*sin(dettheta)+0.2*cos(dettheta)},
+            //     {detx,dety},
+            //     {detx-0.25*cos(dettheta)-0.2*sin(dettheta), dety-0.25*sin(dettheta)+0.2*cos(dettheta)},
+            //     {detx-0.25*cos(dettheta)+0.2*sin(dettheta), dety-0.25*sin(dettheta)-0.2*cos(dettheta)}
+            // };
+            
+            // float angle_min = -M_PI;
+            // float angle_max = M_PI;
+            // size_t num_rays = scan.size();
+            // float angle_increment = (angle_max - angle_min) / num_rays;
+
+            // for (const auto& pos : positions) {
+            //     float x = pos.first;
+            //     float y = pos.second;
+
+            //     float angle = std::atan2(y, x);  // angle from sensor to point
+            //     float distance2 = std::sqrt(x * x + y * y);
+
+            //     // Compute corresponding index
+            //     int index = static_cast<int>(std::round((angle - angle_min) / angle_increment));
+
+            //     // Clamp index to valid range
+            //     if (index >= 0 && index < static_cast<int>(scan_.size())) {
+            //         scan_[index] = distance2;
+            //     }
+            // }
+
 
             // TTC Calculations are done here so the car can be halted in the simulator:
             // to reset TTC
@@ -532,6 +596,31 @@ public:
 
     } // end of update_pose
 
+    void tf_callback(const tf2_msgs::TFMessage::ConstPtr& msg){ //Update the localization transforms
+			int updated=0;
+			 for (const geometry_msgs::TransformStamped& transform : msg->transforms)
+			{
+				if (transform.header.frame_id == "map" && transform.child_frame_id == "det_racecar_base_link") //Simulation detection of other vehicle
+				{
+					//Just for the one vehicle detection case
+					double robx=transform.transform.translation.x;
+					double roby=transform.transform.translation.y;
+					// 		transform.transform.translation.z);
+					double x=transform.transform.rotation.x;
+					double y=transform.transform.rotation.y;
+					double z=transform.transform.rotation.z;
+					double w=transform.transform.rotation.w;
+					double robtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+
+					detx=(robx-state.x)*cos(state.theta)+(roby-state.y)*sin(state.theta);
+					dety=-(robx-state.x)*sin(state.theta)+(roby-state.y)*cos(state.theta);
+                    dettheta=robtheta-state.theta;
+
+				}
+			}
+
+
+		}
 
         /// ---------------------- GENERAL HELPER FUNCTIONS ----------------------
 
@@ -680,9 +769,6 @@ public:
     }
 
     void explore_callback(const geometry_msgs::Twist::ConstPtr& msg) {
-        // desired_speed = std::max(0.0,msg->linear.x);
-        // desired_steer_ang=std::min(std::max(-max_steering_angle,msg->angular.z),max_steering_angle);
-        // printf("%lf, %lf\n",desired_speed, desired_steer_ang);
 
         desired_speed = msg->linear.x;
         if(msg->linear.x!=0){
@@ -691,7 +777,7 @@ public:
         else{
             desired_steer_ang=0;
         }
-        desired_speed=std::max(desired_speed,0.5);
+        desired_speed=std::max(desired_speed,0.5); //Some exploration methods have very slow speeds even when higher speeds are allowed, min bound to ensure forward motion
         desired_steer_ang=std::min(std::max(-max_steering_angle,desired_steer_ang),max_steering_angle);
     }
 
