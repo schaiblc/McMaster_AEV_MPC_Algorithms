@@ -175,15 +175,15 @@
 
   <!-- Choose to launch MPC via <Navigation> , <Navigation_Bezier> or <Navigation_Velocity> -->
 
-  <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
+  <node pkg="f1tenth_simulator" name="navigation_STLMPC" type="navigation_STLMPC" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
 
-  <!-- <node pkg="f1tenth_simulator" name="navigation_bezier" type="navigation_bezier" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation_QBMPC" type="navigation_QBMPC" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node> -->
 
-  <!-- <node pkg="f1tenth_simulator" name="navigation_velocity" type="navigation_velocity" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation_STLMPC_vary_v" type="navigation_STLMPC_vary_v" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node> -->
 
@@ -191,11 +191,11 @@
 
   <!-- Choose one of the leader-follower MPC Navigation nodes-->
 
-  <!-- <node pkg="f1tenth_simulator" name="navigation" type="navigation_velocity_pursuit" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation_STLMPC" type="navigation_P_STLMPC" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node> -->
 
-  <!-- <node pkg="f1tenth_simulator" name="navigation_bezier" type="navigation_bezier_pursuit" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation_QBMPC" type="navigation_P_QBMPC" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node> -->
 
