@@ -201,7 +201,7 @@
 
 
 
-  <!-- Non-predictive PD approach using one tracking line for comparison-->
+  <!-- Non-predictive PD approach using one tracking line (for comparison)-->
 
   <!-- <node pkg="f1tenth_simulator" name="navigation_PD" type="navigation_PD" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
