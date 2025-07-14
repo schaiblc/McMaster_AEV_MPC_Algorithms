@@ -4,10 +4,10 @@ explore:
   costmap_updates_topic: "/move_base/global_costmap/costmap_updates"  # Topic for costmap updates
   visualize: true  # Whether to visualize frontiers
   planner_frequency: 3.0  # Rate in Hz for frontier computation
-  progress_timeout: 30.0  # Timeout for progress
+  progress_timeout: 300.0  # Timeout for progress
   potential_scale: 1e-3  # Weighting for frontier potential
   orientation_scale: 0.0  # Weighting for frontier orientation
   gain_scale: 1.0  # Weighting for frontier gain
   transform_tolerance: 0.3  # Transform tolerance
-  min_frontier_size: 1.0  # Minimum size of the frontier to consider
+  min_frontier_size: 0.5  # Minimum size of the frontier to consider
   #Tuning again is very specific to the environment it is in
