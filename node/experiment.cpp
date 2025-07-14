@@ -27,6 +27,8 @@ private:
     // Listen to drive commands
     ros::Subscriber drive_sub;
 
+    ros::Subscriber explore_sub;
+
     // Listen to vesc
     ros::Subscriber vesc_state_sub;
     ros::Subscriber servo_sub;
@@ -51,6 +53,7 @@ private:
     ros::Publisher erpm_pub;
     ros::Publisher servo_pub;
     ros::Publisher brake_pub;
+    ros::Publisher driver_pub;
 
     // Transform broadcaster for odometry 
     tf2_ros::TransformBroadcaster odom_broadcaster, odom_imu_broadcaster;
@@ -73,6 +76,7 @@ private:
 
     bool    waiting_on_init_yaw = true;
     double  init_yaw=0; double imu_yaw; double omega=0;
+    double max_steering_angle=0;
 
     // Odometry parameters
     double speed_to_erpm_gain, speed_to_erpm_offset,
@@ -94,7 +98,8 @@ RacecarExperiment() {
     n = ros::NodeHandle("~");
     
     // Get topic names
-    std::string drive_topic, scan_topic, odom_topic, mux_topic, imu_topic;
+    std::string drive_topic, scan_topic, odom_topic, mux_topic, imu_topic, explore_topic;
+    explore_topic="/cmd_vel";
     n.getParam("drive_topic", drive_topic);
     n.getParam("scan_topic", scan_topic);
     n.getParam("odom_topic", odom_topic);
@@ -116,6 +121,7 @@ RacecarExperiment() {
     n.getParam("wheelbase", wheelbase);
     n.getParam("max_accel", max_acceleration);
     n.getParam("max_steering_vel",max_servo_speed);
+    n.getParam("max_steering_angle",max_steering_angle);
     n.getParam("driver_smoother_rate",driver_smoother_rate);
     
  
@@ -150,9 +156,13 @@ RacecarExperiment() {
     servo_pub = n.advertise<std_msgs::Float64>("/commands/servo/position", 1);
     brake_pub = n.advertise<std_msgs::Float64>("/commands/motor/brake", 1);
 
+    driver_pub = n.advertise<ackermann_msgs::AckermannDriveStamped>(drive_topic, 1);
+
 
     // Start a subscriber to listen to drive commands
     drive_sub = n.subscribe(drive_topic, 1, &RacecarExperiment::driver_callback, this);
+
+    explore_sub = n.subscribe(explore_topic, 1, &RacecarExperiment::explore_callback, this);
 
     // Start a subscriber to vesc
     vesc_state_sub= n.subscribe("/sensors/core", 1, &RacecarExperiment::vesc_callback, this);
@@ -186,10 +196,37 @@ RacecarExperiment() {
 }
 
     void driver_callback(const ackermann_msgs::AckermannDriveStamped & msg) {
+
         desired_speed = msg.drive.speed;
         desired_steer_ang = msg.drive.steering_angle;
         desired_speed=-speed_to_erpm_gain * desired_speed + speed_to_erpm_offset;
         desired_steer_ang = steering_angle_to_servo_gain * desired_steer_ang + steering_angle_to_servo_offset;
+
+    }
+
+    void explore_callback(const geometry_msgs::Twist::ConstPtr& msg) {
+        // desired_speed = std::max(0.0,msg->linear.x);
+        // desired_steer_ang=std::min(std::max(-max_steering_angle,msg->angular.z),max_steering_angle);
+        // printf("%lf, %lf\n",desired_speed, desired_steer_ang);
+
+        desired_speed = msg->linear.x;
+        if(msg->linear.x!=0){
+            desired_steer_ang = atan2(msg->angular.z * wheelbase, msg->linear.x);
+        }
+        else{
+            desired_steer_ang=0;
+        }
+        printf("Explore speed %lf\n",desired_speed);
+        desired_speed=std::max(desired_speed,0.5);
+        desired_steer_ang=std::min(std::max(-max_steering_angle,desired_steer_ang),max_steering_angle);
+
+        ackermann_msgs::AckermannDriveStamped drive_msg; 
+        drive_msg.header.stamp = ros::Time::now();
+        drive_msg.header.frame_id = "base_link";
+        drive_msg.drive.steering_angle = desired_steer_ang; //delta_d
+        drive_msg.drive.speed = desired_speed; //velocity_MPC
+        
+        driver_pub.publish(drive_msg);
 
     }
 
