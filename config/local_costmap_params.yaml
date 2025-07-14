@@ -14,7 +14,7 @@ local_costmap:
   resolution: 0.1
   obstacle_range: 5.0
   raytrace_range: 5.5
-  inflation_radius: 0
+  inflation_radius: 0.3
   cost_scaling_factor: 1.0
   observation_persistence: 0.0
   inf_is_valid: true
