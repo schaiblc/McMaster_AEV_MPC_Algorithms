@@ -205,9 +205,6 @@ RacecarExperiment() {
     }
 
     void explore_callback(const geometry_msgs::Twist::ConstPtr& msg) {
-        // desired_speed = std::max(0.0,msg->linear.x);
-        // desired_steer_ang=std::min(std::max(-max_steering_angle,msg->angular.z),max_steering_angle);
-        // printf("%lf, %lf\n",desired_speed, desired_steer_ang);
 
         desired_speed = msg->linear.x;
         if(msg->linear.x!=0){
@@ -216,7 +213,6 @@ RacecarExperiment() {
         else{
             desired_steer_ang=0;
         }
-        printf("Explore speed %lf\n",desired_speed);
         desired_speed=std::max(desired_speed,0.5);
         desired_steer_ang=std::min(std::max(-max_steering_angle,desired_steer_ang),max_steering_angle);
 
