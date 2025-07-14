@@ -6,7 +6,7 @@
   </node>
 
   <!-- Launch a map from the maps folder-->
-  <arg name="map" default="$(find f1tenth_simulator)/maps/MPC_map.yaml"/>
+  <arg name="map" default="$(find f1tenth_simulator)/maps/map1.yaml"/>
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
 
   <!-- Launch the racecar model -->
