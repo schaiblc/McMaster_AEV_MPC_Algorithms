@@ -49,8 +49,8 @@
      <!--remap from="/imu/data" to="/imu"/-->
     </node>
 
- <!-- Load the map server -->
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find f1tenth_simulator)/maps/berlin.yaml"/>
+ <!-- Load the map server, map used for AMCL localization -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find f1tenth_simulator)/maps/experiment6.yaml"/>
 
 
 <!--> launch AMCL (Adaptive Monte Carlo Localization) for MPC using a pre-existing map -->
@@ -99,7 +99,7 @@
   </node> -->
 <!-- ?> -->
 
-<!--> launch hector slam -->
+<!--> launch hector slam (Uncomment hector slam and comment map server & AMCL to perform SLAM, save a new map for future localization) -->
 
 <!-- <?ignore -->
 
@@ -175,9 +175,9 @@
 
   <!-- Choose to launch MPC via <Navigation> , <Navigation_Bezier> or <Navigation_Velocity> -->
 
-  <!-- <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
+  <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
-  </node> -->
+  </node>
 
   <!-- <node pkg="f1tenth_simulator" name="navigation_bezier" type="navigation_bezier" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
@@ -191,13 +191,27 @@
 
   <!-- Choose one of the leader-follower MPC Navigation nodes-->
 
-  <node pkg="f1tenth_simulator" name="navigation" type="navigation_velocity_pursuit" output="screen">
+  <!-- <node pkg="f1tenth_simulator" name="navigation" type="navigation_velocity_pursuit" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
-  </node>
+  </node> -->
 
   <!-- <node pkg="f1tenth_simulator" name="navigation_bezier" type="navigation_bezier_pursuit" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node> -->
+
+
+  <!-- Start the move_base node. Uncomment the local planner here, exploration to run exploration-based local planners -->
+  <!-- <node pkg="move_base" type="move_base" name="move_base" output="screen"> -->
+      <!-- <param name="controller_frequency" value="10.0" /> -->
+      <!-- <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" /> -->
+      <!-- <rosparam file="$(find f1tenth_simulator)/config/local_costmap_params.yaml" command="load"/> -->
+      <!-- <rosparam file="$(find f1tenth_simulator)/config/global_costmap_params.yaml" command="load"/> -->
+      <!-- <rosparam file="$(find f1tenth_simulator)/config/teb_local_planner_params.yaml" command="load"/> -->
+  <!-- </node> -->
+
+  <!-- Start the explore_lite node for exploration -->
+  <!-- <rosparam file="$(find f1tenth_simulator)/config/explore_lite_params.yaml" command="load" /> -->
+  <!-- <node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen"/> -->
 
   
 
