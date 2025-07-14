@@ -29,7 +29,7 @@ Successive local tracking lines are generated via QPs (https://github.com/liuq/Q
 
 
 ## QBMPC
-A fourth order Bezier curve is used for simultaneous path planning and control, removing the need for a tracking path. Now, a potential field function is used to avoid local obstacles and constraints on vehicle dynamics are directly incorporated into the curve's formulation. An arbitrary future time horizon can be used for path planning while maintaining the fixed parameterization of the Bezier curve. An SLSQP solver is again used for the nonlinear optimization and control inputs are derived from the curve shape (governed by the control points) and subsequently applied at each control step.
+A fourth-order Bezier curve is used for simultaneous path planning and control, removing the need for a tracking path. Now, a potential field function is used to avoid local obstacles and constraints on vehicle dynamics are directly incorporated into the curve's formulation. An arbitrary future time horizon can be used for path planning while maintaining the fixed parameterization of the Bezier curve. An SLSQP solver is again used for the nonlinear optimization and control inputs are derived from the curve shape (governed by the control points) and subsequently applied at each control step.
 
 **Use the clickable thumbnails below to see the QBMPC algorithm in action:**
 <table>
@@ -71,14 +71,14 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 
 
 ## Additional Notes
-* The navigation nodes for each of the listed algorithms are provided in the node directory.
+* The navigation nodes for each of the listed algorithms are provided in the node directory as well as a non-predictive PD approach which uses a single tracking line from STLMPC (for comparison).
 * The f1tenth_simulator framework for ROS1 (https://github.com/f1tenth/f1tenth_simulator) was used for the implementation of these local path planning techniques.
 * Nonholonomic constraints are assumed according to the kinematic bicycle model, tunable parameters are given in params.yaml.
 * AMCL localization can be enabled in params.yaml as can vehicle detection via YOLO for dynamic obstacle avoidance and vehicle pursuit.
 * The specific navigation algorithm used can be selected in the simulator.launch and experiment.launch files for testing in simulation and experimental environments respectively.
 * simulator.cpp can be modified to produce an arbitrary detected vehicle path in simulation for testing of dynamic obstacle avoidance and pursuit in simulation.
 * Required packages are indicated in the source code, specifically in the package.xml & CMakeLists.txt files.
-* The custom trained YOLO v5 model for MacAEV detection is provided in release v1.0.0 (https://github.com/schaiblc/McMaster_AEV_MPC_Algorithms/releases/tag/v1.0.0) with the appropriate .engine & .onnx files. These files are referenced by path in YOLO.py via ~/catkin_ws/src/f1tenth_simulator/learning_models/Custom_yolo5.engine & ~/catkin_ws/src/f1tenth_simulator/learning_models/yolov5CustomTrained.onnx for real-time inference.
+* The custom trained YOLO v5s model for MacAEV detection is provided in release v1.0.0 (https://github.com/schaiblc/McMaster_AEV_MPC_Algorithms/releases/tag/v1.0.0) with the appropriate .engine & .onnx files. These files are referenced by path in YOLO.py via ~/catkin_ws/src/f1tenth_simulator/learning_models/Custom_yolo5.engine & ~/catkin_ws/src/f1tenth_simulator/learning_models/yolov5CustomTrained.onnx for real-time inference.
 * Operation should be first confirmed in simulation to mitigate the risk of vehicle damage while testing in experimentation.
 
 ## Configurable Parameters
