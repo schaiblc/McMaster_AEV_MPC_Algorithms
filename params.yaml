@@ -303,7 +303,7 @@ pursuit_factor_P_QBMPC: 0.1
 optim_mode: 1 
 max_lidar_range_opt: 5.0
 # Determines if RGB-D camera is used
-use_camera: 1
+use_camera: 0
 
 #Important tuning parameters
 #-> max_lidar_range_opt depending on hall width, open space, sim map, etc (same for safe_distance)
