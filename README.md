@@ -85,8 +85,8 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 **General Path Planning Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| max_speed             | Maximum allowed forward velocity             | 3 m/s          |
+| min_speed             | Minimum allowed forward velocity             | 0 m/s (STLMPC); 0.5 m/s (QBMPC)          |
 <br>
 
 **STLMPC Parameters**
