@@ -398,7 +398,6 @@ class GapBarrier
 		
 		
 
-
 		
 		//Publications
 		ros::Publisher lidar_pub;
