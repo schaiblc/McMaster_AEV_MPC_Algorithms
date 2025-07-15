@@ -913,7 +913,7 @@ class GapBarrier
 			nf.getParam("max_speed",max_speed);
 			nf.getParam("min_speed",min_speed);
 			nf.getParam("max_accel",max_accel); //Max decel set to equal
-			nf.getParam("bez_beta",vel_beta);
+			nf.getParam("vel_beta",vel_beta);
 			nf.getParam("pursuit_beta",pursuit_beta);
 			nf.getParam("theta_band_smooth",theta_band_smooth);
 			nf.getParam("theta_band_diff",theta_band_diff);
