@@ -37,9 +37,6 @@
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
 
-  <node pkg="f1tenth_simulator" name="navigation" type="navigation" output="screen">
-    <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
-  </node>
 
   <!-- Start the move_base node -->
   <node pkg="move_base" type="move_base" name="move_base" output="screen">
