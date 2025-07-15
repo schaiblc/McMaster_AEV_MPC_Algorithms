@@ -243,7 +243,7 @@ yolo_cols: 640
 veh_det_length: 0.5
 veh_det_width: 0.4
 
-use_neural_net: 1 #Enable dynamic vehicle detection for avoidance/pursuit
+use_neural_net: 0 #Enable dynamic vehicle detection for avoidance/pursuit by setting to 1
 
 theta_band_smooth: 200
 theta_band_diff: rad(pi/8)
