@@ -2215,12 +2215,6 @@ class GapBarrier
 										double tfed_x=cos(theta_ref)*(track_x-xpt)+sin(theta_ref)*(track_y-ypt);
 										double tfed_y=-sin(theta_ref)*(track_x-xpt)+cos(theta_ref)*(track_y-ypt); //tf from vehicle frame to future MPC frame
 										double tfed_ang=0;
-										// double tfed_ang=atan2(tfed_y,tfed_x);
-										// if (tfed_ang>M_PI) tfed_ang-=2*M_PI;
-										// if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
-								
-										// lidar_transform_angles_veh_det.push_back(tfed_ang);
-										// fused_ranges_MPC_veh_det.push_back(pow(pow(tfed_x,2)+pow(tfed_y,2),0.5));
 
 										//More complete detection if we construct a box around the current midpoint (note don't need to push back mid point then)
 										double rel_theta=track_theta-theta_ref;
