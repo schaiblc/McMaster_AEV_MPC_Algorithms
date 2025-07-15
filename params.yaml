@@ -9,7 +9,7 @@ buffer_length: 5
 
 # Limits on the speed and steering angle
 max_speed: 3.0 #  meters/second
-min_speed: 0 # Otherwise, vehicle stops (for QBMPC)
+min_speed: 0 # (Positive for QBMPC otherwise vehicle stops)
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
