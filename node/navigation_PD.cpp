@@ -235,6 +235,7 @@ class GapBarrier
 			nf.getParam("scan_range", max_lidar_range);
 			nf.getParam("safe_distance", safe_distance);
 
+			
 			//lidar init
 			ls_ang_inc = 2*M_PI/scan_beams;
 			ls_str = int(round(scan_beams*right_beam_angle/(2*M_PI)));
