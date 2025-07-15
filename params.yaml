@@ -215,6 +215,7 @@ k_p: 3.5
 vehicle_velocity: 1.5
 turn_velocity: 0.8
 velocity_zero: 0.3
+
 # Gap Following Algorithm Parameters
 
 safe_distance: 2
@@ -242,7 +243,7 @@ yolo_cols: 640
 veh_det_length: 0.5
 veh_det_width: 0.4
 
-use_neural_net: 1
+use_neural_net: 1 #Enable dynamic vehicle detection for avoidance/pursuit
 
 theta_band_smooth: 200
 theta_band_diff: rad(pi/8)
