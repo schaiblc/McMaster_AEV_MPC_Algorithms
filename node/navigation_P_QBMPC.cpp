@@ -185,6 +185,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		
 	}
 
+	
 	//Now, the pursuit terms for minimizing distance to the leader's bezier control points
 	if(leader_detect==1){
 		//For (x2,y2) where y2 is fixed
