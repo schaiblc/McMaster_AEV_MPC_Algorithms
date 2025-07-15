@@ -96,6 +96,7 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | angle_br             | Lower angular bound on right obstacle cluster             | 90/180*pi rad          |
 | angle_ar             | Upper angular bound on right obstacle cluster             | 160/180*pi rad          |
 | safe_distance             | Range of obstacles that pose an immediate collision risk             | 2 m          |
+| max_lidar_range_opt             | Maximum look-ahead range for obstacles            | 5 m          |
 <br>
 
 **PD Additional Parameters**
@@ -114,6 +115,7 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | use_map             | Enable/disable AMCL, map obstacles             | 0 (Disabled)          |
 | veh_det_length             | Detected vehicle's box outline length             | 0.5 m          |
 | veh_det_width             | Detected vehicle's box outline width             | 0.4 m          |
+| use_camera             | Enable/disable camera             | 0 (Disabled)          |
 | use_neural_net             | Enable/disable YOLO for vehicle detection             | 0 (Disabled)          |
 | d_factor_STLMPC             | Distance objective term base weight             | 1          |
 | d_dot_factor_STLMPC             | Distance derivative objective term base weight             | 30          |
@@ -150,19 +152,29 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 **Pursuit MPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| MPC_dist             | Distance, below which safe navigation is prioritized             | 0.8 m          |
+| pursuit_dist             | Distance, above which pursuit in formation is prioritized             | 1.5 m          |
+| transit_rate             | Maximum update magnitude in the pursuit weight for one control step            | 0.05          |
+| min_pursue             | Minimum allowed following distance to leader             | 0.7 m          |
+| min_delta             | Bound to ensure division by 0 for radius doesn't occur            | 0.002 rad          |
+| pursuit_x             | Pursuit formation, leader leads by this value in x coordinate             | 2.1 m          |
+| pursuit_y             | Pursuit formation, leader leads by this value in y coordinate             | -0.6 m          |
+| pursuit_beta             | Soft minimum approximation sharpness            | 80 m⁻¹          |
 <br>
 
 **P-STLMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| d_factor_P_STLMPC               | Distance objective term base weight             | 1          |
+| d_dot_factor_P_STLMPC             | Distance derivative objective term base weight             | 30          |
+| delta_factor_P_STLMPC             | Steering angle objective term base weight             | 0.2          |
+| vel_factor_P_STLMPC             | Forward velocity objective term base weight             | 0.2          |
+| d_pursuit_factor_P_STLMPC             | Pursuit distance objective term base weight             | 20          |
+| d_dot_pursuit_factor_P_STLMPC             | Pursuit distance derivative objective term base weight             | 2          |
 <br>
 
 **P-QBMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| pot_field_factor_P_QBMPC             | Obstacle potential field objective term base weight             | 1          |
+| pursuit_factor_P_QBMPC             | Pursuit objective term base weight             | 0.1          |
