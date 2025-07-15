@@ -634,7 +634,6 @@ class GapBarrier
 		xt::xarray<int> cv_sample_rows_raw;
 		xt::xarray<int> cv_sample_cols_raw;
 		
-		
 
 
 		
