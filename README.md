@@ -152,8 +152,8 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 **Pursuit MPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| MPC_dist             | Distance, below which safe navigation is prioritized             | 0.8 m          |
-| pursuit_dist             | Distance, above which pursuit in formation is prioritized             | 1.5 m          |
+| MPC_dist             | Distance, below which safe navigation is exclusively prioritized             | 0.8 m          |
+| pursuit_dist             | Distance, above which pursuit in formation is exclusively prioritized             | 1.5 m          |
 | transit_rate             | Maximum update magnitude in the pursuit weight for one control step            | 0.05          |
 | min_pursue             | Minimum allowed following distance to leader             | 0.7 m          |
 | min_delta             | Bound to ensure division by 0 for radius doesn't occur            | 0.002 rad          |
