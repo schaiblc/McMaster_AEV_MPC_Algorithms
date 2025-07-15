@@ -224,15 +224,11 @@ turn_angle1: rad(pi/6)
 turn_angle2: rad(pi/3)
 stop_time1: 1.0
 stop_time2: 1.0
-# Speed control paramteres
-heading_beam_angle: rad(pi/8)
-stop_distance: 0.8 #m
-stop_distance_decay: 0.5 #m
 
 #TEB & Comparison Waypoint Generation
 waypoint_distance: 1.0
 waypoint_count: 3
-use_manual_fwd: 0 #Doesn't seem to work. The existing methods rely heavily on accurate waypoints. Just comapre my MPC to tuned explore_lite
+use_manual_fwd: 0 
 
 #MPC Parameters
 nMPC: 2
@@ -250,6 +246,11 @@ use_neural_net: 1
 
 theta_band_smooth: 200
 theta_band_diff: rad(pi/8)
+
+# Speed control paramteres
+heading_beam_angle: rad(pi/8)
+stop_distance: 0.8 #m
+stop_distance_decay: 0.5 #m
 
 #STLMPC Optimization Base Weights
 d_factor_STLMPC: 1
