@@ -115,8 +115,8 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | use_map             | Enable/disable AMCL, map obstacles             | 0 (Disabled)          |
 | veh_det_length             | Detected vehicle's box outline length             | 0.5 m          |
 | veh_det_width             | Detected vehicle's box outline width             | 0.4 m          |
-| use_camera             | Enable/disable camera             | 0 (Disabled)          |
-| use_neural_net             | Enable/disable YOLO for vehicle detection             | 0 (Disabled)          |
+| use_camera             | Enable/disable camera (needed for pursuit)             | 0 (Disabled)          |
+| use_neural_net             | Enable/disable YOLO for vehicle detection (needed for pursuit)             | 0 (Disabled)          |
 | d_factor_STLMPC             | Distance objective term base weight             | 1          |
 | d_dot_factor_STLMPC             | Distance derivative objective term base weight             | 30          |
 | delta_factor_STLMPC             | Steering angle objective term base weight             | 1          |
