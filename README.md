@@ -123,15 +123,28 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 **Variable-Velocity STLMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| stop_distance             | Obstacle proximity at which vehicle stops             | 0.8 m          |
+| stop_distance_decay             | Velocity slowdown limit decay rate             | 0.5 m          |
+| theta_band_smooth             | Forward angular passband transition sharpness             | 200 rad⁻¹          |
+| theta_band_diff             | Forward angular passband magnitude limit             | pi/8 rad          |
+| vel_beta             | Soft minimum approximation sharpness             | 10 m⁻¹          |
+| d_factor_STLMPC_vary_v             | Distance objective term base weight             | 1          |
+| d_dot_factor_STLMPC_vary_v             | Distance derivative objective term base weight             | 30          |
+| delta_factor_STLMPC_vary_v             | Steering angle objective term base weight             | 1          |
+| vel_factor_STLMPC_vary_v             | Forward velocity objective term base weight             | 1          |
 <br>
 
 **QBMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
+| bez_ctrl_pts             | Bezier curve control points             | 5 (for quartic Bezier curve)          |
+| bez_curv_pts             | Discretized Bezier curve path points             | 10          |
+| bez_alpha             | Potential field objective distance decay factor             | 5.5 m⁻²         |
+| bez_beta             | Soft minimum approximation sharpness            | 10 m⁻¹          |
+| bez_min_dist             | Minimum obstacle proximity permitted             | 0.3 m          |
+| bez_t_end             | Predicted trajectory time horizon             | 1.5 s          |
+| obs_sep             | Minimum separation between subsampled obstacles              | 0.2 m          |
+| max_obs             | Maximum size of the subsampled obstacle set             | 50          |
 <br>
 
 **Pursuit MPC Additional Parameters**
