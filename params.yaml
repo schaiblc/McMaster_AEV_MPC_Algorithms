@@ -8,8 +8,8 @@ width: 0.342 # meters
 buffer_length: 5
 
 # Limits on the speed and steering angle
-max_speed: 2.5 #  meters/second
-min_speed: 0.5 # Otherwise, vehicle stops
+max_speed: 3.0 #  meters/second
+min_speed: 0 # Otherwise, vehicle stops (for QBMPC)
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
@@ -134,7 +134,7 @@ obstacle_size: 2
 
 # The names of topics to listen and publish to
 joy_topic: "/joy"
-drive_topic: "/drive"
+drive_topic: "/drive" #Change to /drive for normal control from joy
 map_topic: "/map"
 distance_transform_topic: "/dt"
 scan_topic: "/scan"
@@ -217,7 +217,7 @@ turn_velocity: 0.8
 velocity_zero: 0.3
 # Gap Following Algorithm Parameters
 
-safe_distance: 3
+safe_distance: 2
 right_beam_angle: rad(2*pi*4.0/16)
 left_beam_angle: rad(2*pi*12.0/16)
 turn_angle1: rad(pi/6)
@@ -225,7 +225,7 @@ turn_angle2: rad(pi/3)
 stop_time1: 1.0
 stop_time2: 1.0
 # Speed control paramteres
-heading_beam_angle: rad(pi/16)
+heading_beam_angle: rad(pi/8)
 stop_distance: 0.8 #m
 stop_distance_decay: 0.5 #m
 
@@ -246,10 +246,21 @@ yolo_cols: 640
 veh_det_length: 0.5
 veh_det_width: 0.4
 
-use_neural_net: 0
+use_neural_net: 1
 
 theta_band_smooth: 200
 theta_band_diff: rad(pi/8)
+
+#STLMPC Optimization Base Weights
+d_factor_STLMPC: 1
+d_dot_factor_STLMPC: 30
+delta_factor_STLMPC: 1
+
+#STLMPC (Variable-Velocity) Optimization Base Weights
+d_factor_STLMPC_vary_v: 1
+d_dot_factor_STLMPC_vary_v: 30
+delta_factor_STLMPC_vary_v: 1
+vel_factor_STLMPC_vary_v: 1
 
 #Bezier MPC Parameters
 bez_ctrl_pts: 5
@@ -257,9 +268,11 @@ bez_curv_pts: 10
 bez_alpha: 5.5
 bez_beta: 10
 bez_min_dist: 0.3
-bez_t_end: 2
+bez_t_end: 1.5
 obs_sep: 0.2
 max_obs: 50
+#QBMPC only has one objective term, no need for base weights
+
 
 #Leader-follower MPC pursuit parameters
 MPC_dist: 0.8 #Min distance, below which we focus on MPC
@@ -267,19 +280,28 @@ pursuit_dist: 1.5 #Max distance, above which we prioritize pursuit
 transit_rate: 0.05 #Transition rate, how fast to switch sweightings on each mode
 min_pursue: 0.7 #Min distance allowed to the leader
 min_delta: 0.002 #Minimum delta, to ensure our circle arc radius doesn't become 1/0 (undefined)
-pursuit_x: 2.1 #The trajectory at which we want to maintain position from leader, here we want leader 1.1 m ahead in x
-pursuit_y: -0.6 #And 0.1 m ahead in +y
+pursuit_x: 2.1 #The trajectory at which we want to maintain position from leader, here we want leader 2.1 m ahead in x
+pursuit_y: -0.6 #And -0.6 m ahead in +y
 pursuit_beta: 80 #Smoothing factor for min_dist to leader
 
+#P-STLMPC Optimization Base Weights
+d_factor_P_STLMPC: 1
+d_dot_factor_P_STLMPC: 30
+delta_factor_P_STLMPC: 0.2
+vel_factor_P_STLMPC: 0.2
+d_pursuit_factor_P_STLMPC: 20
+d_dot_pursuit_factor_P_STLMPC: 2
 
-# Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
+#P-QBMPC Optimization Base Weights
+pot_field_factor_P_QBMPC: 1
+pursuit_factor_P_QBMPC: 0.1
+
+# Separating Barrier Line Optimization Mode: 0 (independent) 1 (parallel) 
 optim_mode: 1 
 max_lidar_range_opt: 5.0
 # Determines if RGB-D camera is used
 use_camera: 1
 
 #Important tuning parameters
-#-> max_lidar_range_opt depending on hall width, sim map, etc
+#-> max_lidar_range_opt depending on hall width, open space, sim map, etc (same for safe_distance)
 #-> Max and min speeds for bezier (min speed>0) and velocity (min_speed can be 0)
-
-#For berlin.yaml, max_lidar_range_opt should be 3.0
