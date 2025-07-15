@@ -122,6 +122,7 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
+<br>
 
 **P-QBMPC Parameters**
 | Parameter     | Description   | Default    |
