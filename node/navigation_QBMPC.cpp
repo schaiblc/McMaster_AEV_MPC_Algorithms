@@ -154,9 +154,6 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 		double py4=px4;
 		for(int j=0;j<cols-3;j++){
 			double dist2= pow(bez_curv[i][0]-xopt[0][j+3],2)+pow(bez_curv[i][1]-xopt[1][j+3],2); //Squared distance
-			// printf("D2: %e, %e\n",(1/dist2)*exp(-bez_alpha*dist2),funcreturn);
-			
-			// if(bez_alpha*dist2>100) continue; //Numerical error since too small so skip this obs
 			
 			funcreturn=funcreturn+(1.0/dist2)*exp(-bez_alpha*dist2); //Sum of reciprocal squared distances, exponentially decaying weight
 			//Next, find grad for each of five variables
@@ -205,7 +202,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 	//[2] -> y3
 	//[3] -> x4
 	//[4] -> y4
-	int nanflag=0;
+	
 	//Create the discretized Bezier Curve
 	for(int i=0; i<bez_curv_pts; i++){
 		double t=double(i)/double(bez_curv_pts);
@@ -284,9 +281,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		//Max change (+ & -) in velocity
 		result[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
 		result[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-		if(isnan(result[9*i+2])){
-			printf("NAN %lf, %lf, %lf, %lf, %lf, %lf\n",t,x[0],x[1],x[2],x[3],x[4]);
-		}
+		
 
 		if(grad){
 	/*+_x2*/grad[(9*i+2)*n]=2*(x_dot*x_ddot+y_dot*y_ddot)*((pdx2*x_ddot+pddx2*x_dot)*(pow(x_dot,2)+pow(y_dot,2))-x_dot*pdx2*(x_dot*x_ddot+y_dot*y_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2);
@@ -342,9 +337,7 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 		for(int j=0;j<cols-7;j++){
 			double dist1= pow(pow(bez_curv[i][0]-xopt[0][j+7],2)+pow(bez_curv[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
 			result[9*i+8]=result[9*i+8]+exp(-1.0*double(bez_beta)*dist1);
-			if(result[9*i+8]==0){
-				printf("ZERO %d, %d, %e, %lf, %lf, %lf, %lf\n",i,j,result[9*i+8], bez_curv[i][0],xopt[0][j+7],bez_curv[i][1],xopt[1][j+7]);
-			}
+			
 
 			if(grad){
 		/*x2*/	grad[(9*i+8)*n]=grad[(9*i+8)*n]+exp(-1*double(bez_beta)*dist1)*(bez_curv[i][0]-xopt[0][j+7])/dist1*px2;
@@ -361,129 +354,12 @@ void bezier_inequality_con(unsigned m, double *result, unsigned n, const double*
 			grad[(9*i+8)*n+2]=-grad[(9*i+8)*n+2]/result[9*i+8];
 			grad[(9*i+8)*n+3]=-grad[(9*i+8)*n+3]/result[9*i+8];
 			grad[(9*i+8)*n+4]=-grad[(9*i+8)*n+4]/result[9*i+8];
-			if(nanflag==0 && std::isnan(grad[(9*i+8)*n])){
-				nanflag=1;
-				printf("NAN %e, %e\n",myval,result[9*i+8]);
-			}
 		}
 
 		double myval=result[9*i+8];
 		result[9*i+8]=1.0/double(bez_beta)*log(result[9*i+8])+bez_min_dist;
-		if(std::isnan(result[9*i+8])){
-			printf("NAN %lf\n",myval);
-		}
 		
 	}
-
-	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
-		if(std::isnan(result[i])){
-			printf("Result nan %d\n",i);
-		}
-	}
-	if(grad){
-		for(int i=0;i<=(9*(bez_curv_pts-1)+8)*n+4;i++){
-			if(std::isnan(grad[i])){
-				printf("Grad nan %d\n",i);
-			}
-		}
-	}
-
-
-	//Manual checking of analytical gradients
-	// std::vector<std::vector<double>> bez_curv1;
-	// double hval=1e-8;
-	// //Create the discretized Bezier Curve
-	// for(int i=0; i<bez_curv_pts; i++){
-	// 	double t=double(i)/double(bez_curv_pts-1);
-	// 	double bez_x=4*pow(1-t,3)*t*x1+6*pow(1-t,2)*pow(t,2)*x[0]+4*(1-t)*pow(t,3)*x[1]+pow(t,4)*(hval+x[3]);
-	// 	double bez_y=6*pow(1-t,2)*pow(t,2)*y2+4*(1-t)*pow(t,3)*x[2]+pow(t,4)*x[4]; //y1=0
-	// 	bez_curv1.push_back({bez_x,bez_y});
-	// }
-	// double result1[9*(bez_curv_pts-1)+9];
-	// if(result1){
-	// 	for(int i=0;i<=(bez_curv_pts-1)*9+8;i++){
-	// 		result1[i]=0;
-	// 	}
-	// }
-	
-
-	// if(grad){
-	// 	for(int i=0;i<bez_curv_pts; i++){
-	// 		double t=double(i)/double(bez_curv_pts-1);
-	// 		double x_dot=4*x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*(hval+x[3])*pow(t,3);
-	// 		double x_ddot=4*x1*(-12*pow(t,2)+18*t-6)+6*x[0]*(12*pow(t,2)-12*t+2)+4*x[1]*(-12*pow(t,2)+6*t)+12*(hval+x[3])*pow(t,2);
-	// 		double x_dddot=4*x1*(-24*t+18)+6*x[0]*(24*t-12)+4*x[1]*(-24*t+6)+24*(hval+x[3])*t;
-
-	// 		double y_dot=6*y2*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[2]*(-4*pow(t,3)+3*pow(t,2))+4*x[4]*pow(t,3);
-	// 		double y_ddot=6*y2*(12*pow(t,2)-12*t+2)+4*x[2]*(-12*pow(t,2)+6*t)+12*x[4]*pow(t,2);
-	// 		double y_dddot=6*y2*(24*t-12)+4*x[2]*(-24*t+6)+24*x[4]*t;
-
-	// 		double curv=(x_dot*y_ddot-y_dot*x_ddot)/(pow(pow(x_dot,2)+pow(y_dot,2),1.5));
-	// 		double curv_dot=((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))/pow((pow(x_dot,2)+pow(y_dot,2)),2.5);
-
-	// 		double px2=6*pow(1-t,2)*pow(t,2);double px3=4*(1-t)*pow(t,3);double py3=px3;double px4=pow(t,4);double py4=px4; //Partials of original x & y
-	// 		double pdx2=6*(4*pow(t,3)-6*pow(t,2)+2*t);double pdx3=4*(-4*pow(t,3)+3*pow(t,2));double pdy3=pdx3;double pdx4=4*pow(t,3);double pdy4=pdx4; //X_dot & y_dot
-	// 		double pddx2=6*(12*pow(t,2)-12*t+2);double pddx3=4*(-12*pow(t,2)+6*t);double pddy3=pddx3;double pddx4=12*pow(t,2);double pddy4=pddx4; //x_ddot & y_ddot
-	// 		double pdddx2=6*(24*t-12);double pdddx3=4*(-24*t+6);double pdddy3=pdddx3;double pdddx4=24*t;double pdddy4=pdddx4; //x_dddot & y_dddot
-			
-	// 		double pcurvx2=((y_ddot*pdx2-y_dot*pddx2)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx2*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvx3=((y_ddot*pdx3-y_dot*pddx3)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvy3=((x_dot*pddy3-x_ddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy3*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvx4=((y_ddot*pdx4-y_dot*pddx4)*(pow(x_dot,2)+pow(y_dot,2))-3*x_dot*pdx4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-	// 		double pcurvy4=((x_dot*pddy4-x_ddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))-3*y_dot*pdy4*(x_dot*y_ddot-y_dot*x_ddot))/pow(pow(x_dot,2)+pow(y_dot,2),2.5);
-			
-	// 		double num_pdcurvx2=(y_dddot*pdx2-y_dot*pdddx2)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx2*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx2+x_ddot*pdx2)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx2-y_dot*pddx2)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvx3=(y_dddot*pdx3-y_dot*pdddx3)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx3*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx3+x_ddot*pdx3)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx3-y_dot*pddx3)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvy3=(x_dot*pdddy3-x_dddot*pdy3)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy3*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy3+y_ddot*pdy3)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy3-x_ddot*pdy3)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvx4=(y_dddot*pdx4-y_dot*pdddx4)*(pow(x_dot,2)+pow(y_dot,2))+2*x_dot*pdx4*(x_dot*y_dddot-y_dot*x_dddot)-3*((x_dot*pddx4+x_ddot*pdx4)*(x_dot*y_ddot-y_dot*x_ddot)+(y_ddot*pdx4-y_dot*pddx4)*(x_dot*x_ddot+y_dot*y_ddot));
-	// 		double num_pdcurvy4=(x_dot*pdddy4-x_dddot*pdy4)*(pow(x_dot,2)+pow(y_dot,2))+2*y_dot*pdy4*(x_dot*y_dddot-y_dot*x_dddot)-3*((y_dot*pddy4+y_ddot*pdy4)*(x_dot*y_ddot-y_dot*x_ddot)+(x_dot*pddy4-x_ddot*pdy4)*(x_dot*x_ddot+y_dot*y_ddot));
-
-	// 		double pdcurvx2=(num_pdcurvx2*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx2)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvx3=(num_pdcurvx3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvy3=(num_pdcurvy3*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy3)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvx4=(num_pdcurvx4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*x_dot*pdx4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-	// 		double pdcurvy4=(num_pdcurvy4*pow(pow(x_dot,2)+pow(y_dot,2),2.5)-((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))*5*pow(pow(x_dot,2)+pow(y_dot,2),1.5)*y_dot*pdy4)/pow(pow(x_dot,2)+pow(y_dot,2),5);
-
-
-	// 		//Max and min velocity
-	// 		result1[9*i]=pow(x_dot,2)+pow(y_dot,2)-pow(max_v,2)*pow(t_end,2);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i,i,grad[(9*i)*n+3],(result1[9*i]-result[9*i])/hval);
-	// 		result1[9*i+1]=-pow(x_dot,2)-pow(y_dot,2)+pow(min_v,2)*pow(t_end,2);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+1,i,grad[(9*i+1)*n+3],(result1[9*i+1]-result[9*i+1])/hval);
-
-	// 		//Max change (+ & -) in velocity
-	// 		result1[9*i+2]=(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+2,i,grad[(9*i+2)*n+3],(result1[9*i+2]-result[9*i+2])/hval);
-	// 		result1[9*i+3]=-(pow(x_dot*x_ddot+y_dot*y_ddot,2)/(pow(x_dot,2)+pow(y_dot,2)))-pow(max_dv,2)*pow(t_end,4);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+3,i,grad[(9*i+3)*n+3],(result1[9*i+3]-result[9*i+3])/hval);
-
-	// 		//Max (+ & -) curvature
-	// 		result1[9*i+4]=wheelbase*curv-tan(max_delta);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+4,i,grad[(9*i+4)*n+3],(result1[9*i+4]-result[9*i+4])/hval);
-	// 		result1[9*i+5]=-wheelbase*curv-tan(max_delta);
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+5,i,grad[(9*i+5)*n+3],(result1[9*i+5]-result[9*i+5])/hval);
-
-	// 		//Max change (+ & -) in curvature
-	// 		result1[9*i+6]=wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+6,i,grad[(9*i+6)*n+3],(result1[9*i+6]-result[9*i+6])/hval);
-	// 		result1[9*i+7]=-wheelbase*curv_dot/(1+pow(wheelbase*curv,2))-max_ddelta*t_end;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+7,i,grad[(9*i+7)*n+3],(result1[9*i+7]-result[9*i+7])/hval);
-
-	// 		//Smooth minimum obstacle distance
-	// 		for(int j=0;j<cols-7;j++){
-	// 			double dist1= pow(pow(bez_curv1[i][0]-xopt[0][j+7],2)+pow(bez_curv1[i][1]-xopt[1][j+7],2),0.5); //Euclidean distance
-	// 			result1[9*i+8]=result1[9*i+8]+exp(-1*double(bez_beta)*dist1);
-
-	// 		}
-			
-
-	// 		result1[9*i+8]=1.0/double(bez_beta)*log(result1[9*i+8])+bez_min_dist;
-	// 		printf("%d, %d, Grad: %lf, Diff: %lf\n",9*i+8,i,grad[(9*i+8)*n+3],(result1[9*i+8]-result[9*i+8])/hval);
-			
-	// 	}
-	// }
-
-
 
 }
 
@@ -1041,7 +917,6 @@ class GapBarrier
 					double z=transform.transform.rotation.z;
 					double w=transform.transform.rotation.w;
 					simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-					// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
 				}
 			}
 			if(updated){
@@ -1121,7 +996,6 @@ class GapBarrier
 			std::vector<int> temp_vec(car_detects.size(), -1); //yolo detections of already identified detections
 			std::vector<int> no_det; //yolo detections of not pre-identified detections
 			std::vector<std::vector<double>> yolo_xy; //x and y measurements of depth from yolo detection
-			// printf("YOLO: %lf, %lf\n",ros::Time::now().toSec(),cv_image_data.header.stamp.toSec());
 			
 
 			for (int i=0;i<yolo_msg.classes.size();i++){
@@ -1147,14 +1021,11 @@ class GapBarrier
 					double xorigin=cos(odomtheta)*(yolo_xy[0][0])-sin(odomtheta)*yolo_xy[0][1]+odomx;
 					double yorigin=sin(odomtheta)*(yolo_xy[0][0])+cos(odomtheta)*yolo_xy[0][1]+odomy;
 
-					printf("%d, %lf, %lf (%lf, %lf, %lf)\n",i,xorigin,yorigin, odomx,odomy,odomtheta);
-
 				}
 			}
 
 			//For all existing detections, provide the x and y of the depth measurement
 			for (int q=0; q<car_detects.size();q++){
-				// printf("ID: %d, yolo: %d\n",q,temp_vec[q]);
 				int i=temp_vec[q];
 				if(temp_vec[q]!=-1 &&yolo_xy[i][0]!=0 && yolo_xy[i][1]!=0){ //Detection found
 					car_detects[q].bound_box={yolo_msg.rectangles[4*i],yolo_msg.rectangles[4*i+1],yolo_msg.rectangles[4*i+2],yolo_msg.rectangles[4*i+3]}; //ymin, xmin, ymax, xmax
@@ -1166,7 +1037,6 @@ class GapBarrier
 
 			//For all new detections, create structs appended to the vector (deletions should take place in lidar callback)
 			for (int q=0; q<no_det.size();q++){
-				// printf("ID: %d, yolo: %d NEW\n",q,no_det[q]);
 				int i=no_det[q];
 				if(yolo_xy[i][0]!=0 && yolo_xy[i][1]!=0){
 					vehicle_detection new_det;
@@ -1174,8 +1044,8 @@ class GapBarrier
 					new_det.meas={yolo_xy[i][0],yolo_xy[i][1]};
 					new_det.last_det=1;
 					new_det.meas_tf=my_tf;
-					new_det.cov_P(0,0)=0.01; new_det.cov_P(1,1)=0.01; new_det.cov_P(2,2)=std::pow(5 * M_PI / 180, 2);
-					new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(5 * M_PI / 180, 2);
+					new_det.cov_P(0,0)=0.05; new_det.cov_P(1,1)=0.05; new_det.cov_P(2,2)=std::pow(45 * M_PI / 180, 2);
+					new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(45 * M_PI / 180, 2);
 					new_det.proc_noise=new_det.cov_P;
 	
 					car_detects.push_back(new_det);
@@ -1206,20 +1076,15 @@ class GapBarrier
 					rs2_deproject_pixel_to_point(cv_point1.data(), &intrinsics_depth, depth_pixel, (cv_image1.ptr<uint16_t>((int)depth_pixel[1])[(int)depth_pixel[0]])/(float)1000);			
 					rs2_transform_point_to_point(col_point.data(),&extrinsics,cv_point1.data());
 					rs2_project_point_to_pixel(color_pixel,&intrinsics_color,col_point.data());
-					// printf("DEPPIXEL: %lf, %lf COLPIXEL: %lf, %lf\n",depth_pixel[0],depth_pixel[1],color_pixel[0],color_pixel[1]);
 					if(color_pixel[0]<=x_true) depth_pixel[0]+=std::max(1,(int)((x_true-color_pixel[0])/2));
 					if(color_pixel[1]<=y_true) depth_pixel[1]+=std::max(1,(int)((y_true-color_pixel[1])/2));
 						
 				}
 				else{
-					// printf("0, increment %lf, %lf\n",depth_pixel[0],depth_pixel[1]);
 					if(color_pixel[0]<=x_true) depth_pixel[0]++;
 					if(color_pixel[1]<=y_true) depth_pixel[1]++;
 				}
 			}
-			// printf("Depth of corner: %lf\n",(cv_image1.ptr<uint16_t>((int)depth_pixel[1])[(int)depth_pixel[0]])/(float)1000);
-			// printf("\n");
-			// return;
 			//Average depth calculation
 			int count=0;
 			double av_depth=0;
@@ -1251,7 +1116,6 @@ class GapBarrier
 			av_x=av_x/count; av_y=av_y/count;
 			std::vector<double> det_xy; det_xy.push_back(0); det_xy.push_back(0);
 			if(count>0){
-				// printf("x: %lf, y: %lf, depth: %lf\n",av_x,av_y,av_depth);
 				det_xy[0]=av_x; det_xy[1]=av_y;
 			}
 			// else printf("No points found, can't update measurement\n");
@@ -1260,41 +1124,6 @@ class GapBarrier
 
 		}
 
-
-		// void odom_callback(const nav_msgs::OdometryConstPtr& odom_msg){
-		// 	// FILE *file1 = fopen("/home/gjsk/topics1.txt", "a");
-		// 	// ros::Time t19 = ros::Time::now();
-		// 	// fprintf(file1,"ODOM: %lf\n",t19.toSec());
-		// 	// fclose(file1);
-		// 	vel = odom_msg->twist.twist.linear.x;
-		// 	yaw = 2*atan2(odom_msg->pose.pose.orientation.z, odom_msg->pose.pose.orientation.w);
-			
-		// 	lastx=odom_msg->pose.pose.position.x;
-		// 	lasty=odom_msg->pose.pose.position.y;
-		// 	lasttheta=yaw;
-		// 	// printf("odom:%lf, %lf, %lf\n",lastx,lasty,lasttheta);
-		// 	if(abs(odom_msg->pose.pose.position.x)>0.1 && abs(odom_msg->pose.pose.position.y)>0.1){
-		// 		// Open file in append mode
-		// 		// FILE *file = fopen("/home/gjsk/output.txt", "a");
-		// 		// if (file == NULL) {
-		// 		// 	ROS_ERROR("Could not open file for writing.");
-		// 		// 	return;
-		// 		// }
-
-		// 		// Write some odom data to the file (e.g., position data)
-		// 		// fprintf(file,"%lf, %lf, %lf, %lf\n",odom_msg->pose.pose.position.x,odom_msg->pose.pose.position.y,yaw,t19.toSec());
-
-		// 		// Close the file
-		// 		// fclose(file);
-		// 	}
-		// 	// locx=odom_msg->pose.pose.position.x;
-		// 	// locy=odom_msg->pose.pose.position.y;
-		// 	// loctheta=yaw;
-
-
-
-		// 	// ROS_INFO("%.3f", vel);
-		// }
 
 		void mux_callback(const std_msgs::Int32MultiArrayConstPtr& data){nav_active = data->data[nav_mux_idx]; }
 
@@ -1305,7 +1134,6 @@ class GapBarrier
 		void vesc_callback(const vesc_msgs::VescStateStamped & state){
         	vel_adapt = std::max(-( state.state.speed - speed_to_erpm_offset ) / speed_to_erpm_gain,0.1);
 			last_delta = ( last_servo_state.data - steering_angle_to_servo_offset) / steering_angle_to_servo_gain;
-			// vel_adapt= vehicle_velocity; //Remove this
 		}
 
 		void imu_callback(const sensor_msgs::Imu::ConstPtr& data){
@@ -1318,7 +1146,6 @@ class GapBarrier
 			
 			tf::Matrix3x3 m(myQuaternion);
 			m.getRPY(imu_roll, imu_pitch, imu_yaw);
-			// ROS_INFO("ROLL: %.3f, PITCH: %.3f, YAW: %.3f", imu_roll, imu_pitch, imu_yaw);
 
 		}
 
@@ -1327,12 +1154,8 @@ class GapBarrier
 		void imageDepth_callback( const sensor_msgs::ImageConstPtr & img)
 		{
 			
-			ros::Time t19 = ros::Time::now();
-			// printf("%lf\n",t19.toSec());
 			timestamp_cam1=img->header.stamp;
-			// printf("DEPTH: %lf, %lf\n",t19.toSec(),timestamp_cam1.toSec());
-			// ROS_INFO("https://github.com/IntelRealSense/librealsense/issues/2455\n"); //google search: aligned depth to color frequency
-			//or this: https://github.com/IntelRealSense/librealsense/issues/5583
+			
 			if(intrinsics_d_defined)
 			{
 				if(depth_imgs.size()>2) depth_imgs.erase(depth_imgs.begin());
@@ -2014,15 +1837,6 @@ class GapBarrier
 				// std::stringstream ss;
 				solve_quadprog(Gl, gl0, CEl, ce0l, CIl, ci0l, xl);
 				wl[0] = xl[0]; wl[1] = xl[1];
-				// ss << xl[0] << " " << xl[1];
-				// for(int j =0; j < int(obstacle_points_l.size()); ++j){
-				// 	ss << obstacle_points_l[j][0] << " " << obstacle_points_l[j][1];
-				// }
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
-
-				// ROS_INFO("%f, %f", wl[0], wl[1]);
 
 
 				p = n_obs_r;
@@ -2069,18 +1883,6 @@ class GapBarrier
 				// ss << xr[0] << " " << xr[1];
 				wr[0] = xr[0]; wr[1] = xr[1]; 
 
-				// ROS_INFO("%f, %f", wl[0], wl[1]);
-
-				// std::stringstream ss; 
-
-				// for(int i =0; i < n; ++i){
-				// 	for(int j=0; j < n; ++j)
-				// 	ss << Gr[i][j] << " ";
-				// }
-
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
 
 
 			}
@@ -2162,21 +1964,7 @@ class GapBarrier
 
 				wc[0] = (x[0]/(x[2])); wc[1] = (x[1]/(x[2]));
 
-				// std::stringstream ss;
-
-				// ss << wl[0] << " " << wl[1];
-
-
-				// for(int i =0; i < n; ++i)
-				// 	for(int j =0; j < n; ++j) ss << G[i][j] << " ";
-
-
-				// ss << x[0]/(x[2]-1) << " " << x[1]/(x[2]-1);
-				// ss << solve_quadprog(G, gi0, CE, ce0, CI, ci0, x);
-
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
+				
 
 			}
 
@@ -2210,7 +1998,6 @@ class GapBarrier
 				for (int traj=0;traj<40;traj++){
 					p7.x = x_det;	p7.y = y_det;	p7.z = 0;
 					vehicle_detect_path.points.push_back(p7);
-					// printf("Forecast #%d: %lf, %lf\n",traj,x_det,y_det);
 					x_det=x_det+car_detects[i].state[3]*cos(theta_det)/10; //0.1 second increments (coarse but just for visualization)
 					y_det=y_det+car_detects[i].state[3]*sin(theta_det)/10; //0.1 second increments
 					theta_det=theta_det+car_detects[i].state[3]/wheelbase*tan(car_detects[i].state[4])/10; //0.1 second increments
@@ -2225,7 +2012,7 @@ class GapBarrier
 
 
 		void lidar_callback(const sensor_msgs::LaserScanConstPtr &data){
-			
+
 			ls_ang_inc = static_cast<double>(data->angle_increment); 
 			scan_beams = int(2*M_PI/data->angle_increment);
 			ls_str = int(round(scan_beams*right_beam_angle/(2*M_PI)));
@@ -2234,7 +2021,6 @@ class GapBarrier
 			//TODO: ADD TIME STUFF HERE
 			ros::Time ttt = ros::Time::now();
 			current_time = ttt.toSec();
-			// printf("LIDAR: %lf\n",current_time);
 			double dt = current_time - prev_time;
 			if(dt>1){
 				dt=default_dt;
@@ -2245,11 +2031,7 @@ class GapBarrier
 
 			//Vehicle tracking even if we aren't currently driving
 			
-			// std::cout << "Matrix 1:" << std::endl << mat1 << std::endl; //use eigen for Kalman Filter calculations, there may be conflict errors
-			//for example inverse if needed conflicts with QuadProg: under QuadProg.h include but above Eigen, have line:
-			//#undef inverse // Remove the conflicting macro
 			for (int q=car_detects.size()-1; q>=0;q--){ //Iterate backwards to handle deletions
-				// printf("%d\n",car_detects[q].miss_fr);
 				if(car_detects[q].last_det==0){ //No detection over last cycle
 					car_detects[q].miss_fr++;
 					if(car_detects[q].init==1) car_detects[q].init=0; //Two point initialization requires consecutive detections
@@ -2274,7 +2056,6 @@ class GapBarrier
 					//First transform last x and y to this new frame (also the measurements)
 					double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 
-					// printf("Last KF state (og frame): %lf, %lf\n",car_detects[q].state[0],car_detects[q].state[1]);
 					if(simx==0){
 						tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
 							sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
@@ -2306,15 +2087,6 @@ class GapBarrier
 					car_detects[q].state[1]=curmeasy;
 					car_detects[q].state[0]=curmeasx;
 
-					// printf("Last KF state (new frame): %lf, %lf\n",tempx,tempy);
-					// printf("Meas (og) %lf, %lf TF'd -> %lf, %lf\n",car_detects[q].meas[0],car_detects[q].meas[1],curmeasx,curmeasy);
-					// printf("Last KF tf: %lf, %lf, %lf\n", lastx, lasty, lasttheta);
-					// printf("Measure TF: %lf, %lf, %lf\n",car_detects[q].meas_tf.tf_x,car_detects[q].meas_tf.tf_y,car_detects[q].meas_tf.tf_theta);
-					// printf("New KF (live) tf: %lf, %lf, %lf\n",odomx,odomy,odomtheta);
-					// printf("Cur Time: %lf, Closest TF to Meas Time: %lf\n",ros::Time::now().toSec(),car_detects[q].meas_tf.tf_time);
-
-					// printf("%d: %lf, %lf, %lf, %lf, %lf\n\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-					
 					car_detects[q].init=2; //Done initializing
 					car_detects[q].last_det=0;
 					continue;
@@ -2376,18 +2148,18 @@ class GapBarrier
 				if(car_detects[q].last_det==0){ //No detection in this cycle, don't use any measure, just predicted state and covariance
 					car_detects[q].state=pred_state;
 					printf("Missed Measure (%d)\n",q);
-					car_detects[q].proc_noise(0,0)+=0.01; car_detects[q].proc_noise(1,1)+=0.01; //Increase the model's uncertainty via process noise
-					car_detects[q].proc_noise(2,2)+=std::pow(5 * M_PI / 180, 2); car_detects[q].proc_noise(3,3)+=0.01;
-					car_detects[q].proc_noise(4,4)+=std::pow(5 * M_PI / 180, 2);
+
+					car_detects[q].proc_noise(0,0)=0.05; car_detects[q].proc_noise(1,1)=0.05; car_detects[q].proc_noise(2,2)=std::pow(7.5 * M_PI / 180, 2);
+					car_detects[q].proc_noise(3,3)=0.125; car_detects[q].proc_noise(4,4)=std::pow(7.5 * M_PI / 180, 2);
 					car_detects[q].cov_P=state_transition_lin*car_detects[q].cov_P*state_transition_lin.transpose()+car_detects[q].proc_noise;
 					continue;
 				}
 
 				//Process noise should depend on # of missed frames, speed of both our vehicle and the detected vehicle
-				if(car_detects[q].miss_fr==0){
-					car_detects[q].proc_noise(0,0)=0.01; car_detects[q].proc_noise(1,1)=0.01; car_detects[q].proc_noise(2,2)=std::pow(5 * M_PI / 180, 2);
-					car_detects[q].proc_noise(3,3)=0.01; car_detects[q].proc_noise(4,4)=std::pow(5 * M_PI / 180, 2);
-				}
+				// if(car_detects[q].miss_fr==0){
+				car_detects[q].proc_noise(0,0)=0.05; car_detects[q].proc_noise(1,1)=0.05; car_detects[q].proc_noise(2,2)=std::pow(7.5 * M_PI / 180, 2);
+				car_detects[q].proc_noise(3,3)=0.125; car_detects[q].proc_noise(4,4)=std::pow(7.5 * M_PI / 180, 2);
+				// }
 				//Measurement noise should depend on the distance between the vehicles (maybe error of 2% of distance, increases when speeds increase)
 				car_detects[q].meas_noise(0,0)=0.02*sqrt(std::pow(car_detects[q].meas[0],2)+std::pow(car_detects[q].meas[1],2));
 				car_detects[q].meas_noise(1,1)=car_detects[q].meas_noise(0,0);
@@ -2426,25 +2198,6 @@ class GapBarrier
 				Eigen::Matrix<double, 5, 5> identityMatrix = Eigen::Matrix<double, 5, 5>::Identity();
 				car_detects[q].cov_P=(identityMatrix-KF_gain*meas_observability)*car_detects[q].cov_P;
 
-				//Expand once base functionality with changing parameters depending on conditions
-				//Also, different mechanism if no measurement for this cycle
-
-				// std::cout << "Proc Noise:\n" << car_detects[q].proc_noise << std::endl;
-				// std::cout << "Meas Noise:\n" << car_detects[q].meas_noise << std::endl;
-				// printf("Measurement: %lf, %lf\n",car_detects[q].meas[0],car_detects[q].meas[1]);
-				// std::cout << "State:\n" << car_detects[q].state << std::endl;
-				// std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-				// printf("Seems that once measurements get missed, can run into cases of states exploding\n");
-
-				// printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-				// if(car_detects[q].state[3]>0.3){
-				// 	std::cout << "State:\n" << car_detects[q].state << std::endl;
-				// 	std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-				// 	std::cout << "Pred State:\n" << pred_state << std::endl;
-				// 	std::cout << "Measure:\n" << meas_vec << std::endl;
-				// 	printf("%d\n",car_detects[q].miss_fr);
-				// }
-
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
 
@@ -2452,24 +2205,13 @@ class GapBarrier
 			if(simx!=0){lastx=simx; lasty=simy; lasttheta=simtheta;}
 			timestamp_tf2=timestamp_tf1; timestamp_cam2=timestamp_cam1;
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
-			// printf("**********************\n\n");
 
 			if (!nav_active ||(use_map && !map_saved)) { //Don't start navigation until map is saved if that's what we're using
 				drive_state = "normal";
 				return;
 			}
 			
-			 
 
-
-			//pre-processing
-			// std::vector<double> double_data; double value;
-			// for(int i =0; i < int(data->ranges.size()); ++i){
-			// 	value = static_cast<double>(data->ranges[i]);
-			// 	double_data.push_back(value);
-			// }
-			// std::transform(data->ranges.begin(), data->ranges.end(), std::back_inserter(double_data),[](float value)
-			// {return static_cast<double>(value); });
 
 
 			std::vector<float> fused_ranges = data->ranges;
@@ -2477,21 +2219,7 @@ class GapBarrier
 			// {
 			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
 			// }
-
-	
-			// publish_lidar(mod_ranges);
-
-			// std::stringstream ss; 
-			// for(int i =0; i < ls_len_mod ;++i){
-			// 	for(int j =0; j < 2; ++j){
-			// 		ss << proc_ranges[i][j] << " ";
-			// 	}
-			// }
-			// std_msgs::String msg; msg.data = ss.str();
-			// ROS_INFO("%s", msg.data.c_str());
-
-
-			
+		
 			
 
 			int sec_len = int(heading_beam_angle/data->angle_increment);
@@ -2503,6 +2231,10 @@ class GapBarrier
 				std::vector<float> fused_ranges_MPC=fused_ranges;
 				std::vector<float> fused_ranges_MPC_tot0;
 				std::vector<double> lidar_transform_angles_tot0;
+				std::vector<float> fused_ranges_MPC_veh_det0;
+				std::vector<double> lidar_transform_angles_veh_det0;
+				std::vector<float> fused_ranges_MPC_tot0s;
+				std::vector<double> lidar_transform_angles_tot0s;
 
 
 				double track_line[2][nMPC*kMPC]; //Tracking line a & b (assume c=1) parameters for all time intervals, additional terms for passing n & k
@@ -2590,12 +2322,7 @@ class GapBarrier
 										double tfed_x=cos(theta_ref)*(track_x-xpt)+sin(theta_ref)*(track_y-ypt);
 										double tfed_y=-sin(theta_ref)*(track_x-xpt)+cos(theta_ref)*(track_y-ypt); //tf from vehicle frame to future MPC frame
 										double tfed_ang=0;
-										// double tfed_ang=atan2(tfed_y,tfed_x);
-										// if (tfed_ang>M_PI) tfed_ang-=2*M_PI;
-										// if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
-								
-										// lidar_transform_angles_veh_det.push_back(tfed_ang);
-										// fused_ranges_MPC_veh_det.push_back(pow(pow(tfed_x,2)+pow(tfed_y,2),0.5));
+										
 
 										//More complete detection if we construct a box around the current midpoint (note don't need to push back mid point then)
 										double rel_theta=track_theta-theta_ref;
@@ -2612,8 +2339,13 @@ class GapBarrier
 												if (tfed_ang>M_PI) tfed_ang-=2*M_PI; if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
 												lidar_transform_angles_veh_det.push_back(tfed_ang);
 												fused_ranges_MPC_veh_det.push_back(pow(pow(edge_x,2)+pow(edge_y,2),0.5));
-												// printf("%d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,theta_ref, xpt, ypt, track_x, track_y, track_theta, tfed_x, tfed_y);
-												// printf(" %d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,top_right[0],top_right[1],top_left[0],top_left[1],bot_left[0],bot_left[1],bot_right[0],bot_right[1]);
+
+												double edge_x1=edge_x*cos(theta_ref)-sin(theta_ref)*edge_y+xpt;
+												double edge_y1=edge_x*sin(theta_ref)+cos(theta_ref)*edge_y+ypt;
+												double tfed_ang1=atan2(edge_y1,edge_x1);
+												if (tfed_ang1>M_PI) tfed_ang1-=2*M_PI; if (tfed_ang1<-M_PI) tfed_ang1+=2*M_PI;
+												lidar_transform_angles_veh_det0.push_back(tfed_ang1);
+												fused_ranges_MPC_veh_det0.push_back(pow(pow(edge_x1,2)+pow(edge_y1,2),0.5));
 												
 											}
 
@@ -2652,9 +2384,21 @@ class GapBarrier
 
 					}
 
+					if(num_MPC==0){
+						double smallestdist=1000;
+						for(int i=0;i<fused_ranges_MPC.size();i++){
+							if(fused_ranges_MPC[i]<smallestdist){
+								smallestdist=fused_ranges_MPC[i];
+							}
+						}
+						
+					}
+
 					if(num_MPC==0){ //Take the original reference points for subsampling obstacles in NLOPT
 						fused_ranges_MPC_tot0=fused_ranges_MPC_tot;
 						lidar_transform_angles_tot0=lidar_transform_angles_tot;
+						fused_ranges_MPC_tot0s=fused_ranges_MPC;
+						lidar_transform_angles_tot0s=lidar_transform_angles;
 					}
 
 					std::vector<float> proc_ranges_MPC = preprocess_lidar_MPC(fused_ranges_MPC_tot,lidar_transform_angles_tot);
@@ -2671,7 +2415,6 @@ class GapBarrier
 						heading_angle_MPC= find_best_point_MPC(str_indx_MPC, end_indx_MPC, proc_ranges_MPC,lidar_transform_angles_tot);
 						heading_angle=heading_angle_MPC;
 						
-						printf("HEADING %d, %lf\n",num_MPC,heading_angle);
 						
 						if(num_MPC==0){
 					
@@ -2818,7 +2561,6 @@ class GapBarrier
 					
 					xptplot[num_MPC]=xpt;
 					yptplot[num_MPC]=ypt;
-					printf("THETA %d, %lf\n",num_MPC,theta_ref);
 
 				
 					if(num_MPC<nMPC-1){//Prepare LIDAR data for next iteration, no longer constantly spaced lidar angles	
@@ -2882,9 +2624,6 @@ class GapBarrier
 							}
 						}
 						if(min_dist>obs_sep1 && pow(pow(x_ob,2)+pow(y_ob,2),0.5)<max_lidar_range_opt){
-							// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
-							// fprintf(file1,"%lf, %lf\n",obstacle[0],obstacle[1]);
-							// fclose(file1);
 							
 							sub_bez_obs.push_back({obstacle[0],obstacle[1]});
 						}
@@ -2893,9 +2632,6 @@ class GapBarrier
 					num_obs=sub_bez_obs.size();
 					obs_sep1=obs_sep1*1.1;
 				}
-				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
-				// fprintf(file1,"*******************\n");
-				// fclose(file1);
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
 				nlopt_opt opt;
@@ -2929,7 +2665,6 @@ class GapBarrier
 					opt_params2.push_back(sub_bez_obs[i][0]);
 					opt_params2.push_back(sub_bez_obs[i][1]);
 				}
-				// printf("1: %d, %d 2: %d, %d\n",opt_params1.size(),2*(num_obs+3),opt_params2.size(),2*(num_obs+7));
 
 				nlopt_set_min_objective(opt, myfunc, opt_params1.data());
 				double tol[9*bez_curv_pts]={1e-8};
@@ -2947,7 +2682,6 @@ class GapBarrier
 				x[2]=std::min(std::max(-max_lidar_range+1e-6,yptplot[0]),max_lidar_range-1e-6); //y3
 				x[3]=std::min(std::max(-max_lidar_range+1e-6,xptplot[1]),max_lidar_range-1e-6); //x4
 				x[4]=std::min(std::max(-max_lidar_range+1e-6,yptplot[1]),max_lidar_range-1e-6); //y4
-				printf("%lf, %lf, %lf, %lf, %lf StartPt\n",x[0],x[1],x[2],x[3],x[4]);
 
 				int successful_opt=0;
 
@@ -2974,7 +2708,7 @@ class GapBarrier
 
 				if (optim < 0) {
 					safe_distance_adapt=safe_distance_adapt/2;
-					printf("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
+					ROS_ERROR("Optimization Error, %d, %lf, %lf, %lf, %lf, %lf\n",optim,x[0],x[1],x[2],x[3],x[4]);
 					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
 				}
 				else {
@@ -2982,30 +2716,12 @@ class GapBarrier
 					printf("Successful Opt: %d\n",optim);
 					safe_distance_adapt=safe_distance;
 					//Save the control points here
-					printf("%lf, %lf, %lf, %lf, %lf SOLVED\n",x[0],x[1],x[2],x[3],x[4]);
 					bez_x2=x[0];
 					bez_x3=x[1];
 					bez_y3=x[2];
 					bez_x4=x[3];
 					bez_y4=x[4];
-					//Integrate over curve until next sample to obtain v, delta
-					// double dist_trav=0;
-					// double dist_des=std::max(vel_adapt,min_speed)*std::max(default_dt,dt);
-					// double t_des=0;
-					// double last_x=0; double last_y=0;
-					// for(int i=1; i<bez_curv_pts*100;i++){
-					// 	double t=double(i)/double(bez_curv_pts*100-1);
-					// 	double new_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
-					// 	double new_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
-						
-					// 	dist_trav=dist_trav+pow(pow(new_x-last_x,2)+pow(new_y-last_y,2),0.5);
-					// 	last_x=new_x; last_y=new_y;
 
-					// 	if(dist_trav>dist_des){
-					// 		t_des=t;
-					// 		break;
-					// 	}
-					// }
 					
 					double t= std::max(default_dt,dt)/bez_t_end;
 					double x_dot=4*bez_x1*(-4*pow(t,3)+9*pow(t,2)-6*t+1)+6*x[0]*(4*pow(t,3)-6*pow(t,2)+2*t)+4*x[1]*(-4*pow(t,3)+3*pow(t,2))+4*x[3]*pow(t,3);
@@ -3020,7 +2736,12 @@ class GapBarrier
 					double curv_dot=((x_dot*y_dddot-y_dot*x_dddot)*(pow(x_dot,2)+pow(y_dot,2))-3*(x_dot*x_ddot+y_dot*y_ddot)*(x_dot*y_ddot-y_dot*x_ddot))/pow((pow(x_dot,2)+pow(y_dot,2)),2.5);
 
 					last_delta=atan2(curv*wheelbase,1);
+					last_delta=std::max(-max_steering_angle,last_delta);
+					last_delta=std::min(max_steering_angle,last_delta);
 					vel_adapt=std::min(pow(pow(x_dot,2)+pow(y_dot,2),0.5)/bez_t_end,max_speed);
+
+
+					
 
 
 					//Find minimum distance
@@ -3036,15 +2757,8 @@ class GapBarrier
 							}
 						}
 					}
-					if(min_dist1<bez_min_dist){
-						printf("Unsafe MinDist: %lf\n",min_dist1);
-						vel_adapt=0;
-					}
 					
 
-					// printf("%lf, %lf %lf, %lf, %lf Delta Vel\n",last_delta,vel_adapt,curv*wheelbase,dist_des,t);
-					// printf("(%lf,0), (%lf,%lf), (%lf,%lf), (%lf,%lf)",bez_x1,bez_x2,bez_y2,bez_x3,bez_y3,bez_x4,bez_y4);
-					
 				}
 				startcheck=1;
 
@@ -3199,25 +2913,16 @@ class GapBarrier
 					p5.x = obstacle1[0]; p5.y = obstacle1[1]; p5.z = 0;
 					bez.points.push_back(p5);
 				}
-				// p5.x = xptplot[0]; p5.y = yptplot[0]; p5.z = 0;
-				// bez.points.push_back(p5);
-				// p5.x = xptplot[1]; p5.y = yptplot[1]; p5.z = 0;
-				// bez.points.push_back(p5);
 
-				// printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf\n",bez_x1,bez_y2,bez_x2,bez_y3,bez_x3,bez_x4,bez_y4);
 				for(int i=0; i<bez_curv_pts*10; i++){
 					double t=double(i)/double(bez_curv_pts*10-1);
 					double bez_x=4*pow(1-t,3)*t*bez_x1+6*pow(1-t,2)*pow(t,2)*bez_x2+4*(1-t)*pow(t,3)*bez_x3+pow(t,4)*bez_x4;
 					double bez_y=6*pow(1-t,2)*pow(t,2)*bez_y2+4*(1-t)*pow(t,3)*bez_y3+pow(t,4)*bez_y4; //y1=0
 					p5.x = bez_x; p5.y = bez_y; p5.z = 0;
-					// printf("%lf, %lf\n",bez_x,bez_y);
 					bez.points.push_back(p5);
 				}
 
 				bez_mark.publish(bez);
-
-				//Implement steering angle based on opt now, use last_delta returned as next delta_init for simulation (overwritten for experiment)
-
 
 
 				//Ackermann Steering
@@ -3227,22 +2932,30 @@ class GapBarrier
 				min_distance = max_lidar_range + 100; int idx1, idx2;
 				idx1 = -sec_len+int(scan_beams/2); idx2 = sec_len + int(scan_beams/2);
 
-				for(int i = idx1; i <= idx2; ++i){
-					if(fused_ranges[i] < min_distance) min_distance = fused_ranges[i];
+				// for(int i = idx1; i <= idx2; ++i){
+				// 	if(fused_ranges[i] < min_distance) min_distance = fused_ranges[i];
+				// }
+				for(int i=0;i<fused_ranges_MPC_tot0.size();i++){ //Consider all obstacles, not just sensor data
+					if(std::abs(lidar_transform_angles_tot0[i])<heading_beam_angle && fused_ranges_MPC_tot0[i]<min_distance){
+						min_distance=fused_ranges_MPC_tot0[i];
+					}
+
+				}
+				for(int i=0;i<fused_ranges_MPC_veh_det0.size();i++){ //Consider the full detected vehicle trajectory
+					if(std::abs(lidar_transform_angles_veh_det0[i])<heading_beam_angle && fused_ranges_MPC_veh_det0[i]<min_distance){
+						min_distance=fused_ranges_MPC_veh_det0[i];
+					}
+
 				}
 
 				velocity_scale = 1 - exp(-std::max(min_distance-stop_distance,0.0)/stop_distance_decay); //factor ensures we only slow when appropriate, otherwise MPC behaviour dominates
 				
-				// ROS_INFO("%.3f", velocity);
 
 				delta_d=last_delta; //Use next delta command now to allow servo to transition
 
 				velocity_MPC = velocity_scale*vel_adapt; //Implement slowing if we near an obstacle
 
-				// velocity_MPC=std::max(vel_adapt,min_speed); //REMOVE
-
 				vel_adapt=velocity_MPC;
-				printf("SLOW %lf%% %lf m/s %lf m\n",velocity_scale*100,velocity_MPC,min_distance);
 
 			}
 
@@ -3253,7 +2966,8 @@ class GapBarrier
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
 					drive_msg.drive.speed = velocity_MPC; //velocity_MPC
-					printf("VEL: %lf\n",velocity_MPC);
+					printf("Steering Angle: %lf, Velocity: %lf\n",delta_d,velocity_MPC);
+					printf("*******************\n");
 				}
 				else{
 					drive_msg.drive.speed = 0;
@@ -3265,8 +2979,6 @@ class GapBarrier
 			}
 			
 			driver_pub.publish(drive_msg);
-			ros::Time ta = ros::Time::now();
-			// printf("LIDAR end: %lf\n",ta.toSec()-current_time);
 		}
 
 
@@ -3277,14 +2989,7 @@ int main(int argc, char **argv){
 		GapBarrier gb;
 
 		while(ros::ok()){
-			// std_msgs::String msg;
-			// std::stringstream ss;
-			// ss  << gb.preprocess_lidar(); 
-			// msg.data = ss.str();
-
-			// ROS_INFO("%s", msg.data.c_str());
-
-			// chatter_pub.publish(msg);
+			
 			ros::spinOnce();
 		}
 
