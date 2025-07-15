@@ -60,7 +60,10 @@
 //C++ will auto typedef float3 data type
 int nMPC=0; //Defined outside class to be used in predefined functions for nlopt MPC calculation
 int kMPC=0;
-int nanflag=0;
+double d_factor=1; //Change weighting of d vs d_dot terms, etc in params.yaml
+double d_dot_factor=30;
+double delta_factor=1;
+double vel_factor=1; //Scale importance of higher velocities (racing), use default weights here
 
 
 struct float3
@@ -113,10 +116,7 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	//Gradient calculated based on three parts, d part, d_dot due to p_dot for both current and then next point (obj is only nonzero partial x & y)
 	double (*track_line)[nMPC*kMPC] = (double (*)[nMPC*kMPC]) my_func_data; //track_line is now the normal double array
 	double funcreturn=0; //Create objective function as the sum of d and d_dot squared terms (d_dot part assumes constant w)
-	double d_factor=1; //Change weighting of d vs d_dot terms
-	double d_dot_factor=30;
-	double delta_factor=0.1;
-	double vel_factor=0.1; //Scale importance of higher velocities (racing)
+	
 	if(grad){
 		for(int i=0;i<n;i++){
 			grad[i]=0;
@@ -124,10 +124,6 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 	}
 	for (int i=0;i<nMPC*kMPC;i++){
 			funcreturn=funcreturn+d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
-			if(nanflag==0 && isnan(d_factor*(pow(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1,2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2))))){
-				printf("NAN1 %lf, %lf, %d\n",x[2*nMPC*kMPC+i],x[3*nMPC*kMPC+i],i);
-				nanflag=1;
-			}
 			if(grad){
 				grad[2*nMPC*kMPC+i]=d_factor*(2*track_line[0][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
 				grad[3*nMPC*kMPC+i]=d_factor*(2*track_line[1][i]*(track_line[0][i]*x[2*nMPC*kMPC+i]+track_line[1][i]*x[3*nMPC*kMPC+i]+1)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)));
@@ -138,42 +134,22 @@ double myfunc(unsigned n, const double *x, double *grad, void *my_func_data) //N
 			}
 			if(i<nMPC*kMPC-1){
 				funcreturn=funcreturn+d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
-				if(nanflag==0 && isnan(d_dot_factor*pow(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]),2)/(pow(track_line[0][i],2)+pow(track_line[1][i],2)))){
-					printf("NAN2\n");
-					nanflag=1;
-				}
 				if(grad){
 					grad[2*nMPC*kMPC+i]=grad[2*nMPC*kMPC+i]-d_dot_factor*2*track_line[0][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 					grad[3*nMPC*kMPC+i]=grad[3*nMPC*kMPC+i]-d_dot_factor*2*track_line[1][i]*(track_line[0][i]*(x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i])+track_line[1][i]*(x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]))/(pow(track_line[0][i],2)+pow(track_line[1][i],2));
 				}
 			}
 			funcreturn=funcreturn+delta_factor*pow(x[nMPC*kMPC+i],2); //The scaling factor of this term may need to be param, depends on speed (tuning)
-			if(nanflag==0 && isnan(delta_factor*pow(x[nMPC*kMPC+i],2))){
-				printf("NAN3\n");
-				nanflag=1;
-			}
 			if(grad){ //Prioritize lower steering angle magnitudes
 				grad[i]=0; //Gradients wrt theta = 0
 				grad[nMPC*kMPC+i]=delta_factor*2*x[nMPC*kMPC+i];
 			}
 			funcreturn=funcreturn+vel_factor/pow(x[4*nMPC*kMPC+i],2); //Prioritize higher velocities
-			if(nanflag==0 && isnan(vel_factor/pow(x[4*nMPC*kMPC+i],2))){
-				printf("NAN4\n");
-				nanflag=1;
-			}
 			if(grad){
 				grad[4*nMPC*kMPC+i]=-vel_factor*2/pow(x[4*nMPC*kMPC+i],3);
 			}
 	}
-	// printf("%lf\n",funcreturn);
-	if(grad){
-		for(int i=0; i<n;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN FUNC%d\n",i);
-				nanflag=1;
-			}
-		}
-	}
+	
 	
 	return funcreturn;
 }
@@ -187,23 +163,12 @@ void theta_equality_con(unsigned m, double *result, unsigned n, const double* x,
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[i+1]-x[i]-opt_params[0]*x[4*nMPC*kMPC+i]/opt_params[1]*tan(x[nMPC*kMPC+i]);
-		if(isnan(result[i] &&nanflag==0)){
-			printf("THETANAN\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[i*n+i]=-1;
 			grad[i*n+i+1]=1;
 			grad[i*n+nMPC*kMPC+i]=-opt_params[0]*x[4*nMPC*kMPC+i]/opt_params[1]*pow(1/cos(x[nMPC*kMPC+i]),2);
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]/opt_params[1]*tan(x[nMPC*kMPC+i]);
-		}
-	}
-	if(grad){
-		for(int i=0; i<n*m;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN THETA%d\n",i);
-				nanflag=1;
-			}
 		}
 	}
 
@@ -218,23 +183,12 @@ void x_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[2*nMPC*kMPC+i+1]-x[2*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*cos(x[i]);
-		if(isnan(result[i]) && nanflag==0){
-			printf("XNAN\n");
-			nanflag=1;
-		}
+		
 		if(grad){		
 			grad[i*n+2*nMPC*kMPC+i]=-1;
 			grad[i*n+2*nMPC*kMPC+i+1]=1;
 			grad[i*n+i]=opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*cos(x[i]);
-		}
-	}
-	if(grad){
-		for(int i=0; i<n*m;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN X%d\n",i);
-				nanflag=1;
-			}
 		}
 	}
 }
@@ -248,10 +202,7 @@ void y_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 	}
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[i]=x[3*nMPC*kMPC+i+1]-x[3*nMPC*kMPC+i]-opt_params[0]*x[4*nMPC*kMPC+i]*sin(x[i]);
-		if(isnan(result[i])&&nanflag==0){
-			printf("YNAN\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[i*n+3*nMPC*kMPC+i]=-1;
 			grad[i*n+3*nMPC*kMPC+i+1]=1;
@@ -259,14 +210,7 @@ void y_equality_con(unsigned m, double *result, unsigned n, const double* x, dou
 			grad[i*n+4*nMPC*kMPC+i]=-opt_params[0]*sin(x[i]);
 		}
 	}
-	if(grad){
-		for(int i=0; i<n*m;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN Y%d\n",i);
-				nanflag=1;
-			}
-		}
-	}
+	
 }
 
 void delta_inequality_con(unsigned m, double *result, unsigned n, const double* x, double* grad, void* f_data){ //Delta kinematics inequality
@@ -279,10 +223,7 @@ void delta_inequality_con(unsigned m, double *result, unsigned n, const double* 
 	for (int i=0;i<nMPC*kMPC-1;i++){
 		result[2*i]=x[nMPC*kMPC+i+1]-x[nMPC*kMPC+i]-opt_params[2];
 		result[2*i+1]=-x[nMPC*kMPC+i+1]+x[nMPC*kMPC+i]-opt_params[2];
-		if(isnan(result[2*i+1])&&nanflag==0){
-			printf("DELTANAN\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[2*i*n+nMPC*kMPC+i]=-1;
 			grad[2*i*n+nMPC*kMPC+i+1]=1;
@@ -297,14 +238,7 @@ void delta_inequality_con(unsigned m, double *result, unsigned n, const double* 
 		grad[(2*nMPC*kMPC-2)*n+nMPC*kMPC]=1;
 		grad[(2*nMPC*kMPC-1)*n+nMPC*kMPC]=-1;
 	}
-	if(grad){
-		for(int i=0; i<n*m;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN DELTA%d\n",i);
-				nanflag=1;
-			}
-		}
-	}
+	
 
 }
 
@@ -342,10 +276,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 	for(int i=0;i<nMPC*kMPC-1;i++){
 		//Max change in vel
 		result[4*i]=x[4*nMPC*kMPC+i+1]-x[4*nMPC*kMPC+i]-accel_max;
-		if(isnan(result[4*i])&&nanflag==0){
-			printf("VELNAN1\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[4*i*n+(4*nMPC*kMPC+i+1)]=1;
 			grad[4*i*n+(4*nMPC*kMPC+i)]=-1;
@@ -353,10 +284,7 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 		//-Max change in vel
 		result[4*i+1]=-x[4*nMPC*kMPC+i+1]+x[4*nMPC*kMPC+i]-accel_max;
-		if(isnan(result[4*i+1])&&nanflag==0){
-			printf("VELNAN2\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[(4*i+1)*n+(4*nMPC*kMPC+i+1)]=-1;
 			grad[(4*i+1)*n+(4*nMPC*kMPC+i)]=1;
@@ -364,64 +292,38 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 		//Steering angle dependency
 		result[4*i+2]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
-		if(isnan(result[4*i+2])&&nanflag==0){
-			printf("VELNAN3\n");
-			nanflag=1;
-		}
+		
 		if(grad){
 			grad[(4*i+2)*n+4*nMPC*kMPC+i]=1;
 			grad[(4*i+2)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
 		}
-		// printf("*************\n");
 		//Obstacle proximity dependency
 		for(int j=0;j<cols-5;j++){
 			double dist1=pow(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2),0.5);
 			double theta1=atan2(-x[3*nMPC*kMPC+i]+xopt[1][j+5],-x[2*nMPC*kMPC+i]+xopt[0][j+5]);
 			double theta_diff=atan2(sin(x[i]-theta1),cos(x[i]-theta1));
 			
-			// if(std::abs(theta_diff)<std::abs(theta_band_diff)){	
-			// 	printf("%lf, %lf, %lf, %lf, %lf, %lf, %lf, %d\n",dist1, theta_diff, x[2*nMPC*kMPC+i], x[3*nMPC*kMPC+i], x[i], xopt[0][j+5], xopt[1][j+5], i);
-			// }
 			double theta_band=1/(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff))) - 1/(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)));
 			
 			result[4*i+3]=result[4*i+3]+exp(-vel_beta*dist1)*theta_band;
-			if(isnan(result[4*i+3])&&nanflag==0){
-				printf("VELNAN4\n");
-				nanflag=1;
-			}
+			
 			if(grad){
 				double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
 				double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
 				double dtheta_band=(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2) - (exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2);
 				double dthetadiffx=(x[3*nMPC*kMPC+i]-xopt[1][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
 				double dthetadiffy=-(x[2*nMPC*kMPC+i]-xopt[0][j+5])/(pow(x[2*nMPC*kMPC+i]-xopt[0][j+5],2)+pow(x[3*nMPC*kMPC+i]-xopt[1][j+5],2));
-				if(isnan(dtheta_band)&&nanflag==0){
-					printf("THET %lf, %lf\n",(exp(-theta_band_smooth*(theta_diff+theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),(exp(-theta_band_smooth*(theta_diff-theta_band_diff)))/pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
-					printf("%lf, %lf, %lf\n",theta_diff,theta_band_smooth,theta_band_diff);
-					printf("%lf, %lf, %lf, %lf\n",exp(-theta_band_smooth*(theta_diff+theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff+theta_band_diff)),2),exp(-theta_band_smooth*(theta_diff-theta_band_diff)),pow(1+exp(-theta_band_smooth*(theta_diff-theta_band_diff)),2));
-
-				}
+				
 				grad[(4*i+3)*n+2*nMPC*kMPC+i]=grad[(4*i+3)*n+2*nMPC*kMPC+i]+ distdx*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffx; //x
 				grad[(4*i+3)*n+3*nMPC*kMPC+i]=grad[(4*i+3)*n+3*nMPC*kMPC+i]+ distdy*theta_band+exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth*dthetadiffy; //y
 			
-				if(isnan(grad[(4*i+3)*n+i])&&nanflag==0){
-					printf("%lf\n",grad[(4*i+3)*n+i]);
-					nanflag=1;
-				}
-				
 				grad[(4*i+3)*n+i]=grad[(4*i+3)*n+i]+ exp(-vel_beta*dist1)*dtheta_band*theta_band_smooth; //theta
 				
-				if(nanflag==0&&isnan(grad[(4*i+3)*n+i])){
-					printf("%lf, %lf, %lf\n",grad[(4*i+3)*n+i],dtheta_band,exp(-vel_beta*dist1));
-					nanflag=1;
-				}
-			
 			}
 		}
 		double d_min=-1/vel_beta*log(result[4*i+3]);
-		// if(i==0){
-		// 	printf("DMIN: %lf, %lf%%\n",d_min,100*(1-exp(-(d_min-stop_dist)/stop_dist_decay)));
-		// }
+		
+		
 		if(grad){
 			grad[(4*i+3)*n+2*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+2*nMPC*kMPC+i];
 			grad[(4*i+3)*n+3*nMPC*kMPC+i]=vel_max*exp(-(d_min-stop_dist)/stop_dist_decay)/(stop_dist_decay*vel_beta*result[4*i+3])*grad[(4*i+3)*n+3*nMPC*kMPC+i];
@@ -430,10 +332,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		}
 		result[4*i+3]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
 		
-		if(isnan(result[4*i+3])&&nanflag==0){
-			printf("VELNAN4a\n");
-			nanflag=1;
-		}
 
 	}
 
@@ -441,10 +339,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 	int i=nMPC*kMPC-1;
 	//Steering angle dependency
 	result[4*i]=x[4*nMPC*kMPC+i]-vel_max/(1+pow(x[nMPC*kMPC+i]/delta_max,2));
-	if(isnan(result[4*i])&&nanflag==0){
-		printf("VELNAN4b\n");
-		nanflag=1;
-	}
 	if(grad){
 		grad[(4*i)*n+4*nMPC*kMPC+i]=1;
 		grad[(4*i)*n+nMPC*kMPC+i]=(vel_max*2*x[nMPC*kMPC+i]/pow(delta_max,2))/pow(pow(x[nMPC*kMPC+i]/delta_max,2)+1,2);
@@ -459,10 +353,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 
 		result[4*i+1]=result[4*i+1]+exp(-vel_beta*dist1)*theta_band;
 
-		if(isnan(result[4*i+1])&&nanflag==0){
-			printf("VELNAN4c\n");
-			nanflag=1;
-		}
 		if(grad){
 			double distdx=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[2*nMPC*kMPC+i]-xopt[0][j+5]);
 			double distdy=-vel_beta*exp(-vel_beta*dist1)/dist1*(x[3*nMPC*kMPC+i]-xopt[1][j+5]);
@@ -483,19 +373,6 @@ void vel_inequality_con(unsigned m, double *result, unsigned n, const double* x,
 		grad[(4*i+1)*n+4*nMPC*kMPC+i]=1;
 	}
 	result[4*i+1]=x[4*nMPC*kMPC+i]-vel_max*(1-exp(-(d_min-stop_dist)/stop_dist_decay));
-	
-	if(isnan(result[4*i+1])&&nanflag==0){
-		printf("VELNAN4d\n");
-		nanflag=1;
-	}
-	if(grad){
-		for(int i=0; i<n*m;i++){
-			if(isnan(grad[i])&&nanflag==0){
-				printf("NAN VEL%d\n",i);
-				nanflag=1;
-			}
-		}
-	}
 
 }
 
@@ -604,6 +481,9 @@ class GapBarrier
 
 		double yaw0, dtheta; double turn_angle; 
 		double turn_velocity;
+		double robx=0;
+		double roby=0;
+		double robtheta=0;
 
 		double max_servo_speed;
 		double min_speed=0;
@@ -631,6 +511,7 @@ class GapBarrier
 		std_msgs::Float64 last_servo_state;
 		double vel_adapt=1;
 		double stopped=0;
+		double stopped_msg=0;
 
 		double testx, testy, testtheta;
 
@@ -804,6 +685,10 @@ class GapBarrier
 			//MPC parameters
             nf.getParam("nMPC",nMPC);
             nf.getParam("kMPC",kMPC);
+			nf.getParam("d_factor_STLMPC_vary_v",d_factor);
+            nf.getParam("d_dot_factor_STLMPC_vary_v",d_dot_factor);
+			nf.getParam("delta_factor_STLMPC_vary_v",delta_factor);
+			nf.getParam("vel_factor_STLMPC_vary_v",vel_factor);
 			nf.getParam("angle_thresh", angle_thresh);
 			nf.getParam("map_thresh", map_thresh);
 			nf.getParam("use_map", use_map);
@@ -1008,14 +893,14 @@ class GapBarrier
 				else if (transform.header.frame_id == "map" && transform.child_frame_id == "det_racecar_base_link") //Simulation detection of other vehicle
 				{
 					//Just for the one vehicle detection case
-					double robx=transform.transform.translation.x;
-					double roby=transform.transform.translation.y;
+					robx=transform.transform.translation.x;
+					roby=transform.transform.translation.y;
 					// 		transform.transform.translation.z);
 					double x=transform.transform.rotation.x;
 					double y=transform.transform.rotation.y;
 					double z=transform.transform.rotation.z;
 					double w=transform.transform.rotation.w;
-					double robtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
+					robtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
 
 					double detx=(robx-simx)*cos(simtheta)+(roby-simy)*sin(simtheta);
 					double dety=-(robx-simx)*sin(simtheta)+(roby-simy)*cos(simtheta);
@@ -1053,7 +938,6 @@ class GapBarrier
 					double z=transform.transform.rotation.z;
 					double w=transform.transform.rotation.w;
 					simtheta = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-					// printf("%lf, %lf, %lf, %lf\n",simx,simy,simtheta,ros::Time::now().toSec());
 				}
 			}
 			if(updated){
@@ -1133,7 +1017,6 @@ class GapBarrier
 			std::vector<int> temp_vec(car_detects.size(), -1); //yolo detections of already identified detections
 			std::vector<int> no_det; //yolo detections of not pre-identified detections
 			std::vector<std::vector<double>> yolo_xy; //x and y measurements of depth from yolo detection
-			// printf("YOLO: %lf, %lf\n",ros::Time::now().toSec(),cv_image_data.header.stamp.toSec());
 			
 
 			for (int i=0;i<yolo_msg.classes.size();i++){
@@ -1159,14 +1042,11 @@ class GapBarrier
 					double xorigin=cos(odomtheta)*(yolo_xy[0][0])-sin(odomtheta)*yolo_xy[0][1]+odomx;
 					double yorigin=sin(odomtheta)*(yolo_xy[0][0])+cos(odomtheta)*yolo_xy[0][1]+odomy;
 
-					printf("%d, %lf, %lf (%lf, %lf, %lf)\n",i,xorigin,yorigin, odomx,odomy,odomtheta);
-
 				}
 			}
 
 			//For all existing detections, provide the x and y of the depth measurement
 			for (int q=0; q<car_detects.size();q++){
-				// printf("ID: %d, yolo: %d\n",q,temp_vec[q]);
 				int i=temp_vec[q];
 				if(temp_vec[q]!=-1 &&yolo_xy[i][0]!=0 && yolo_xy[i][1]!=0){ //Detection found
 					car_detects[q].bound_box={yolo_msg.rectangles[4*i],yolo_msg.rectangles[4*i+1],yolo_msg.rectangles[4*i+2],yolo_msg.rectangles[4*i+3]}; //ymin, xmin, ymax, xmax
@@ -1178,7 +1058,6 @@ class GapBarrier
 
 			//For all new detections, create structs appended to the vector (deletions should take place in lidar callback)
 			for (int q=0; q<no_det.size();q++){
-				// printf("ID: %d, yolo: %d NEW\n",q,no_det[q]);
 				int i=no_det[q];
 				if(yolo_xy[i][0]!=0 && yolo_xy[i][1]!=0){
 					vehicle_detection new_det;
@@ -1186,8 +1065,8 @@ class GapBarrier
 					new_det.meas={yolo_xy[i][0],yolo_xy[i][1]};
 					new_det.last_det=1;
 					new_det.meas_tf=my_tf;
-					new_det.cov_P(0,0)=0.01; new_det.cov_P(1,1)=0.01; new_det.cov_P(2,2)=std::pow(5 * M_PI / 180, 2);
-					new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(5 * M_PI / 180, 2);
+					new_det.cov_P(0,0)=0.05; new_det.cov_P(1,1)=0.05; new_det.cov_P(2,2)=std::pow(45 * M_PI / 180, 2);
+					new_det.cov_P(3,3)=2; new_det.cov_P(4,4)=std::pow(45 * M_PI / 180, 2);
 					new_det.proc_noise=new_det.cov_P;
 	
 					car_detects.push_back(new_det);
@@ -1218,20 +1097,15 @@ class GapBarrier
 					rs2_deproject_pixel_to_point(cv_point1.data(), &intrinsics_depth, depth_pixel, (cv_image1.ptr<uint16_t>((int)depth_pixel[1])[(int)depth_pixel[0]])/(float)1000);			
 					rs2_transform_point_to_point(col_point.data(),&extrinsics,cv_point1.data());
 					rs2_project_point_to_pixel(color_pixel,&intrinsics_color,col_point.data());
-					// printf("DEPPIXEL: %lf, %lf COLPIXEL: %lf, %lf\n",depth_pixel[0],depth_pixel[1],color_pixel[0],color_pixel[1]);
 					if(color_pixel[0]<=x_true) depth_pixel[0]+=std::max(1,(int)((x_true-color_pixel[0])/2));
 					if(color_pixel[1]<=y_true) depth_pixel[1]+=std::max(1,(int)((y_true-color_pixel[1])/2));
 						
 				}
 				else{
-					// printf("0, increment %lf, %lf\n",depth_pixel[0],depth_pixel[1]);
 					if(color_pixel[0]<=x_true) depth_pixel[0]++;
 					if(color_pixel[1]<=y_true) depth_pixel[1]++;
 				}
 			}
-			// printf("Depth of corner: %lf\n",(cv_image1.ptr<uint16_t>((int)depth_pixel[1])[(int)depth_pixel[0]])/(float)1000);
-			// printf("\n");
-			// return;
 			//Average depth calculation
 			int count=0;
 			double av_depth=0;
@@ -1263,7 +1137,6 @@ class GapBarrier
 			av_x=av_x/count; av_y=av_y/count;
 			std::vector<double> det_xy; det_xy.push_back(0); det_xy.push_back(0);
 			if(count>0){
-				// printf("x: %lf, y: %lf, depth: %lf\n",av_x,av_y,av_depth);
 				det_xy[0]=av_x; det_xy[1]=av_y;
 			}
 			// else printf("No points found, can't update measurement\n");
@@ -1272,41 +1145,6 @@ class GapBarrier
 
 		}
 
-
-		// void odom_callback(const nav_msgs::OdometryConstPtr& odom_msg){
-		// 	// FILE *file1 = fopen("/home/gjsk/topics1.txt", "a");
-		// 	// ros::Time t19 = ros::Time::now();
-		// 	// fprintf(file1,"ODOM: %lf\n",t19.toSec());
-		// 	// fclose(file1);
-		// 	vel = odom_msg->twist.twist.linear.x;
-		// 	yaw = 2*atan2(odom_msg->pose.pose.orientation.z, odom_msg->pose.pose.orientation.w);
-			
-		// 	lastx=odom_msg->pose.pose.position.x;
-		// 	lasty=odom_msg->pose.pose.position.y;
-		// 	lasttheta=yaw;
-		// 	// printf("odom:%lf, %lf, %lf\n",lastx,lasty,lasttheta);
-		// 	if(abs(odom_msg->pose.pose.position.x)>0.1 && abs(odom_msg->pose.pose.position.y)>0.1){
-		// 		// Open file in append mode
-		// 		// FILE *file = fopen("/home/gjsk/output.txt", "a");
-		// 		// if (file == NULL) {
-		// 		// 	ROS_ERROR("Could not open file for writing.");
-		// 		// 	return;
-		// 		// }
-
-		// 		// Write some odom data to the file (e.g., position data)
-		// 		// fprintf(file,"%lf, %lf, %lf, %lf\n",odom_msg->pose.pose.position.x,odom_msg->pose.pose.position.y,yaw,t19.toSec());
-
-		// 		// Close the file
-		// 		// fclose(file);
-		// 	}
-		// 	// locx=odom_msg->pose.pose.position.x;
-		// 	// locy=odom_msg->pose.pose.position.y;
-		// 	// loctheta=yaw;
-
-
-
-		// 	// ROS_INFO("%.3f", vel);
-		// }
 
 		void mux_callback(const std_msgs::Int32MultiArrayConstPtr& data){nav_active = data->data[nav_mux_idx]; }
 
@@ -1317,7 +1155,6 @@ class GapBarrier
 		void vesc_callback(const vesc_msgs::VescStateStamped & state){
         	vel_adapt = std::max(-( state.state.speed - speed_to_erpm_offset ) / speed_to_erpm_gain,0.1);
 			last_delta = ( last_servo_state.data - steering_angle_to_servo_offset) / steering_angle_to_servo_gain;
-			// vel_adapt= vehicle_velocity; //Remove this
 		}
 
 		void imu_callback(const sensor_msgs::Imu::ConstPtr& data){
@@ -1330,7 +1167,6 @@ class GapBarrier
 			
 			tf::Matrix3x3 m(myQuaternion);
 			m.getRPY(imu_roll, imu_pitch, imu_yaw);
-			// ROS_INFO("ROLL: %.3f, PITCH: %.3f, YAW: %.3f", imu_roll, imu_pitch, imu_yaw);
 
 		}
 
@@ -1339,12 +1175,8 @@ class GapBarrier
 		void imageDepth_callback( const sensor_msgs::ImageConstPtr & img)
 		{
 			
-			ros::Time t19 = ros::Time::now();
-			// printf("%lf\n",t19.toSec());
 			timestamp_cam1=img->header.stamp;
-			// printf("DEPTH: %lf, %lf\n",t19.toSec(),timestamp_cam1.toSec());
-			// ROS_INFO("https://github.com/IntelRealSense/librealsense/issues/2455\n"); //google search: aligned depth to color frequency
-			//or this: https://github.com/IntelRealSense/librealsense/issues/5583
+			
 			if(intrinsics_d_defined)
 			{
 				if(depth_imgs.size()>2) depth_imgs.erase(depth_imgs.begin());
@@ -1891,29 +1723,7 @@ class GapBarrier
 				safe_dist=safe_dist*0.9;
 				
 			}
-			// if(num_MPC==0){
-			// 	if(left_ind_MPC>right_ind_MPC+25){ //Decrease safe distance threshold if objects ahead are close, make shorter horizon predictions
-			// 		double mindist=10000;
-			// 		double start_ind=double(right_ind_MPC)+2.0/5.0*double(left_ind_MPC-right_ind_MPC);
-			// 		double end_ind=double(right_ind_MPC)+3.0/5.0*double(left_ind_MPC-right_ind_MPC);
-			// 		for(int j=int(start_ind);j<int(end_ind);j++){
-			// 			if(ranges1[j]<mindist){
-			// 				mindist=ranges1[j];
-			// 			}
-			// 		}
-			// 		adapt_max_range=std::max(0.1,std::min(2*mindist,safe_dist));
-			// 		if(1.5*mindist>safe_dist){
-			// 			printf("SAFEDIST\n");
-			// 		}
-			// 		else{
-			// 			printf("PROX\n");
-			// 		}
-			// 	}
-			// 	else{
-			// 		adapt_max_range=std::max(0.1,safe_dist);
-			// 	}
-				
-			// }
+			
 			if(num_MPC==0){	
 				adapt_max_range=std::max(0.1,safe_dist);
 			}
@@ -2053,15 +1863,6 @@ class GapBarrier
 				// std::stringstream ss;
 				solve_quadprog(Gl, gl0, CEl, ce0l, CIl, ci0l, xl);
 				wl[0] = xl[0]; wl[1] = xl[1];
-				// ss << xl[0] << " " << xl[1];
-				// for(int j =0; j < int(obstacle_points_l.size()); ++j){
-				// 	ss << obstacle_points_l[j][0] << " " << obstacle_points_l[j][1];
-				// }
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
-
-				// ROS_INFO("%f, %f", wl[0], wl[1]);
 
 
 				p = n_obs_r;
@@ -2108,18 +1909,6 @@ class GapBarrier
 				// ss << xr[0] << " " << xr[1];
 				wr[0] = xr[0]; wr[1] = xr[1]; 
 
-				// ROS_INFO("%f, %f", wl[0], wl[1]);
-
-				// std::stringstream ss; 
-
-				// for(int i =0; i < n; ++i){
-				// 	for(int j=0; j < n; ++j)
-				// 	ss << Gr[i][j] << " ";
-				// }
-
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
 
 
 			}
@@ -2201,21 +1990,6 @@ class GapBarrier
 
 				wc[0] = (x[0]/(x[2])); wc[1] = (x[1]/(x[2]));
 
-				// std::stringstream ss;
-
-				// ss << wl[0] << " " << wl[1];
-
-
-				// for(int i =0; i < n; ++i)
-				// 	for(int j =0; j < n; ++j) ss << G[i][j] << " ";
-
-
-				// ss << x[0]/(x[2]-1) << " " << x[1]/(x[2]-1);
-				// ss << solve_quadprog(G, gi0, CE, ce0, CI, ci0, x);
-
-				// std_msgs::String msg; msg.data = ss.str();
-				// ROS_INFO("%s", msg.data.c_str());
-				// msg.data.clear();
 
 			}
 
@@ -2249,7 +2023,6 @@ class GapBarrier
 				for (int traj=0;traj<40;traj++){
 					p7.x = x_det;	p7.y = y_det;	p7.z = 0;
 					vehicle_detect_path.points.push_back(p7);
-					// printf("Forecast #%d: %lf, %lf\n",traj,x_det,y_det);
 					x_det=x_det+car_detects[i].state[3]*cos(theta_det)/10; //0.1 second increments (coarse but just for visualization)
 					y_det=y_det+car_detects[i].state[3]*sin(theta_det)/10; //0.1 second increments
 					theta_det=theta_det+car_detects[i].state[3]/wheelbase*tan(car_detects[i].state[4])/10; //0.1 second increments
@@ -2273,7 +2046,6 @@ class GapBarrier
 			//TODO: ADD TIME STUFF HERE
 			ros::Time t = ros::Time::now();
 			current_time = t.toSec();
-			// printf("LIDAR: %lf\n",current_time);
 			double dt = current_time - prev_time;
 			if(dt>1){
 				dt=default_dt;
@@ -2284,11 +2056,7 @@ class GapBarrier
 
 			//Vehicle tracking even if we aren't currently driving
 			
-			// std::cout << "Matrix 1:" << std::endl << mat1 << std::endl; //use eigen for Kalman Filter calculations, there may be conflict errors
-			//for example inverse if needed conflicts with QuadProg: under QuadProg.h include but above Eigen, have line:
-			//#undef inverse // Remove the conflicting macro
 			for (int q=car_detects.size()-1; q>=0;q--){ //Iterate backwards to handle deletions
-				// printf("%d\n",car_detects[q].miss_fr);
 				if(car_detects[q].last_det==0){ //No detection over last cycle
 					car_detects[q].miss_fr++;
 					if(car_detects[q].init==1) car_detects[q].init=0; //Two point initialization requires consecutive detections
@@ -2299,13 +2067,6 @@ class GapBarrier
 			}
 
 			for(int q=0; q<car_detects.size();q++){ //Run the KF for every current detections here
-				// printf("%d: %lf\n",q,pow(pow(car_detects[q].meas[0],2)+pow(car_detects[q].meas[0],2),0.5));
-				// printf("%d, %d, %d, %d\n",car_detects[q].bound_box[0],car_detects[q].bound_box[1],car_detects[q].bound_box[2],car_detects[q].bound_box[3]);
-				//Next things to do:
-				//1) Confirm edge image functionality, may want to select a point closer to edge so the midpoint doesnt drift off of the vehicle and spike the state
-				//2)Review the video to see why for no apparent reason, the vehicle can spike when first being detected. We cap v to 3 m/s but for stationary, shouldnt be high
-				//3) Add the box for the detected vehicle in LIDAR, not just point so we can avoid all of it better
-				//4) Adaptive KF noise error for higher speeds of this and other vehicle
 				
 				if(car_detects[q].init==0){ //Initialize
 					if(car_detects[q].last_det==1){ //Only if measurement received
@@ -2320,7 +2081,6 @@ class GapBarrier
 					//First transform last x and y to this new frame (also the measurements)
 					double tempx=0; double tempy=0; double curmeasx=0; double curmeasy=0;
 
-					// printf("Last KF state (og frame): %lf, %lf\n",car_detects[q].state[0],car_detects[q].state[1]);
 					if(simx==0){
 						tempx=cos(odomtheta)*(lastx+car_detects[q].state[0]*cos(lasttheta)-car_detects[q].state[1]*sin(lasttheta)-odomx)+
 							sin(odomtheta)*(lasty+car_detects[q].state[0]*sin(lasttheta)+car_detects[q].state[1]*cos(lasttheta)-odomy);
@@ -2351,15 +2111,6 @@ class GapBarrier
 					car_detects[q].state[1]=curmeasy;
 					car_detects[q].state[0]=curmeasx;
 
-					// printf("Last KF state (new frame): %lf, %lf\n",tempx,tempy);
-					// printf("Meas (og) %lf, %lf TF'd -> %lf, %lf\n",car_detects[q].meas[0],car_detects[q].meas[1],curmeasx,curmeasy);
-					// printf("Last KF tf: %lf, %lf, %lf\n", lastx, lasty, lasttheta);
-					// printf("Measure TF: %lf, %lf, %lf\n",car_detects[q].meas_tf.tf_x,car_detects[q].meas_tf.tf_y,car_detects[q].meas_tf.tf_theta);
-					// printf("New KF (live) tf: %lf, %lf, %lf\n",odomx,odomy,odomtheta);
-					// printf("Cur Time: %lf, Closest TF to Meas Time: %lf\n",ros::Time::now().toSec(),car_detects[q].meas_tf.tf_time);
-
-					// printf("%d: %lf, %lf, %lf, %lf, %lf\n\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-					
 					car_detects[q].init=2; //Done initializing
 					car_detects[q].last_det=0;
 					continue;
@@ -2421,18 +2172,18 @@ class GapBarrier
 				if(car_detects[q].last_det==0){ //No detection in this cycle, don't use any measure, just predicted state and covariance
 					car_detects[q].state=pred_state;
 					printf("Missed Measure (%d)\n",q);
-					car_detects[q].proc_noise(0,0)+=0.01; car_detects[q].proc_noise(1,1)+=0.01; //Increase the model's uncertainty via process noise
-					car_detects[q].proc_noise(2,2)+=std::pow(5 * M_PI / 180, 2); car_detects[q].proc_noise(3,3)+=0.01;
-					car_detects[q].proc_noise(4,4)+=std::pow(5 * M_PI / 180, 2);
+
+					car_detects[q].proc_noise(0,0)=0.05; car_detects[q].proc_noise(1,1)=0.05; car_detects[q].proc_noise(2,2)=std::pow(7.5 * M_PI / 180, 2);
+					car_detects[q].proc_noise(3,3)=0.125; car_detects[q].proc_noise(4,4)=std::pow(7.5 * M_PI / 180, 2);
 					car_detects[q].cov_P=state_transition_lin*car_detects[q].cov_P*state_transition_lin.transpose()+car_detects[q].proc_noise;
 					continue;
 				}
 
-				//Process noise should depend on # of missed frames, speed of both our vehicle and the detected vehicle
-				if(car_detects[q].miss_fr==0){
-					car_detects[q].proc_noise(0,0)=0.01; car_detects[q].proc_noise(1,1)=0.01; car_detects[q].proc_noise(2,2)=std::pow(5 * M_PI / 180, 2);
-					car_detects[q].proc_noise(3,3)=0.01; car_detects[q].proc_noise(4,4)=std::pow(5 * M_PI / 180, 2);
-				}
+				//Process noise should depend on speed of both our vehicle and the detected vehicle
+				
+				car_detects[q].proc_noise(0,0)=0.05; car_detects[q].proc_noise(1,1)=0.05; car_detects[q].proc_noise(2,2)=std::pow(7.5 * M_PI / 180, 2);
+				car_detects[q].proc_noise(3,3)=0.125; car_detects[q].proc_noise(4,4)=std::pow(7.5 * M_PI / 180, 2);
+				
 				//Measurement noise should depend on the distance between the vehicles (maybe error of 2% of distance, increases when speeds increase)
 				car_detects[q].meas_noise(0,0)=0.02*sqrt(std::pow(car_detects[q].meas[0],2)+std::pow(car_detects[q].meas[1],2));
 				car_detects[q].meas_noise(1,1)=car_detects[q].meas_noise(0,0);
@@ -2471,27 +2222,6 @@ class GapBarrier
 				Eigen::Matrix<double, 5, 5> identityMatrix = Eigen::Matrix<double, 5, 5>::Identity();
 				car_detects[q].cov_P=(identityMatrix-KF_gain*meas_observability)*car_detects[q].cov_P;
 
-				//Expand once base functionality with changing parameters depending on conditions
-				//Also, different mechanism if no measurement for this cycle
-
-				// std::cout << "Proc Noise:\n" << car_detects[q].proc_noise << std::endl;
-				// std::cout << "Meas Noise:\n" << car_detects[q].meas_noise << std::endl;
-				// printf("Measurement: %lf, %lf\n",car_detects[q].meas[0],car_detects[q].meas[1]);
-				// std::cout << "State:\n" << car_detects[q].state << std::endl;
-				// std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-				// printf("Seems that once measurements get missed, can run into cases of states exploding\n");
-
-				// printf("%d: %lf, %lf, %lf, %lf, %lf\n",q,car_detects[q].state[0],car_detects[q].state[1],car_detects[q].state[2],car_detects[q].state[3],car_detects[q].state[4]);
-				
-				// if(car_detects[q].state[3]>0.3){
-				// 	std::cout << "State:\n" << car_detects[q].state << std::endl;
-				// 	std::cout << "Cov:\n" << car_detects[q].cov_P << std::endl;
-				// 	std::cout << "Pred State:\n" << pred_state << std::endl;
-				// 	std::cout << "Measure:\n" << meas_vec << std::endl;
-				// 	printf("%d\n",car_detects[q].miss_fr);
-				// }
-
-
 
 				car_detects[q].last_det=0; //Reset the detection for next iteration, done at end to know in KF whether detected or not this cycle
 			}
@@ -2500,10 +2230,13 @@ class GapBarrier
 			if(simx!=0){lastx=simx; lasty=simy; lasttheta=simtheta;}
 			timestamp_tf2=timestamp_tf1; timestamp_cam2=timestamp_cam1;
 			visualize_detections(); //PLot the detections in rviz regardless of if we are in autonomous mode or not
-			// printf("**********************\n\n");
 
-			if (!nav_active ||(use_map && !map_saved)||stopped) { //Don't start navigation until map is saved if that's what we're using
+			if (!nav_active ||(use_map && !map_saved)||stopped)  { //Don't start navigation until map is saved if that's what we're using
 				drive_state = "normal";
+				if(stopped==1 && stopped_msg==0){
+					stopped_msg=1;
+					ROS_ERROR("Vehicle stopped since too close to obstacles. Restart to move again\n");
+				}
 				return;
 			}
 			
@@ -2526,18 +2259,6 @@ class GapBarrier
 			// 	if(cv_image_data_defined){ augment_camera(fused_ranges); }
 			// }
 
-	
-			// publish_lidar(mod_ranges);
-
-			// std::stringstream ss; 
-			// for(int i =0; i < ls_len_mod ;++i){
-			// 	for(int j =0; j < 2; ++j){
-			// 		ss << proc_ranges[i][j] << " ";
-			// 	}
-			// }
-			// std_msgs::String msg; msg.data = ss.str();
-			// ROS_INFO("%s", msg.data.c_str());
-
 
 			
 			
@@ -2551,6 +2272,8 @@ class GapBarrier
 				std::vector<float> fused_ranges_MPC=fused_ranges;
 				std::vector<float> fused_ranges_MPC_tot0;
 				std::vector<double> lidar_transform_angles_tot0;
+				std::vector<float> fused_ranges_MPC_veh_det0;
+				std::vector<double> lidar_transform_angles_veh_det0;
 				double savex=0, savey=0, savetheta=0;
 
 
@@ -2643,12 +2366,7 @@ class GapBarrier
 										double tfed_x=cos(theta_ref)*(track_x-xpt)+sin(theta_ref)*(track_y-ypt);
 										double tfed_y=-sin(theta_ref)*(track_x-xpt)+cos(theta_ref)*(track_y-ypt); //tf from vehicle frame to future MPC frame
 										double tfed_ang=0;
-										// double tfed_ang=atan2(tfed_y,tfed_x);
-										// if (tfed_ang>M_PI) tfed_ang-=2*M_PI;
-										// if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
-								
-										// lidar_transform_angles_veh_det.push_back(tfed_ang);
-										// fused_ranges_MPC_veh_det.push_back(pow(pow(tfed_x,2)+pow(tfed_y,2),0.5));
+										
 
 										//More complete detection if we construct a box around the current midpoint (note don't need to push back mid point then)
 										double rel_theta=track_theta-theta_ref;
@@ -2665,9 +2383,14 @@ class GapBarrier
 												if (tfed_ang>M_PI) tfed_ang-=2*M_PI; if (tfed_ang<-M_PI) tfed_ang+=2*M_PI;
 												lidar_transform_angles_veh_det.push_back(tfed_ang);
 												fused_ranges_MPC_veh_det.push_back(pow(pow(edge_x,2)+pow(edge_y,2),0.5));
-												// printf("%d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,theta_ref, xpt, ypt, track_x, track_y, track_theta, tfed_x, tfed_y);
-												// printf(" %d, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf\n",num_MPC,top_right[0],top_right[1],top_left[0],top_left[1],bot_left[0],bot_left[1],bot_right[0],bot_right[1]);
-												// printf("  %d, %d, %d, %lf, %lf, %lf\n",num_MPC,q,c1,edge_x,edge_y,tfed_ang);
+
+												double edge_x1=edge_x*cos(theta_ref)-sin(theta_ref)*edge_y+xpt;
+												double edge_y1=edge_x*sin(theta_ref)+cos(theta_ref)*edge_y+ypt;
+												double tfed_ang1=atan2(edge_y1,edge_x1);
+												if (tfed_ang1>M_PI) tfed_ang1-=2*M_PI; if (tfed_ang1<-M_PI) tfed_ang1+=2*M_PI;
+												lidar_transform_angles_veh_det0.push_back(tfed_ang1);
+												fused_ranges_MPC_veh_det0.push_back(pow(pow(edge_x1,2)+pow(edge_y1,2),0.5));
+
 											}
 
 										}
@@ -2703,6 +2426,19 @@ class GapBarrier
 							
 						}
 
+					}
+
+					if(num_MPC==0){
+						double smallestdist=1000;
+						double smallestdist2=1000;
+						for(int i=0;i<fused_ranges_MPC.size();i++){
+							if(fused_ranges_MPC[i]<smallestdist){
+								smallestdist=fused_ranges_MPC[i];
+							}
+							if(std::abs(lidar_transform_angles[i])<theta_band_diff && fused_ranges_MPC[i]<smallestdist2){
+								smallestdist2=fused_ranges_MPC[i];
+							}
+						}
 					}
 
 					if(num_MPC==0){ //Take the original reference points for subsampling obstacles in NLOPT
@@ -2893,20 +2629,6 @@ class GapBarrier
 						else wc[1]=-0.00001;
 					}		
 
-
-					//Delete this
-					// wc[0]=0.0001; wc[1]=100;
-					// temp_wc0=wc[0]*cos(odomtheta)-wc[1]*sin(odomtheta);
-					// temp_wc1=wc[0]*sin(odomtheta)+wc[1]*cos(odomtheta);
-					// wc[0]=temp_wc0/(1-wc_new[0]*odomx+100*odomy);
-					// wc[1]=temp_wc1/(1+0.0001*odomx+100*odomy);
-					// printf("%lf, %lf, %lf\n",odomx,odomy,odomtheta);
-					// printf("%lf, %lf\n",wc[0],wc[1]);
-
-
-
-
-
 					
 					//Find the startng point closest to the new tracking line
 					double anorm=-1/wc[0],bnorm=1/wc[1],cnorm=-anorm*xpt-bnorm*ypt;
@@ -3009,9 +2731,7 @@ class GapBarrier
 							}
 						}
 						if(min_dist>obs_sep1 && pow(pow(x_ob,2)+pow(y_ob,2),0.5)<max_lidar_range_opt){
-							// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
-							// fprintf(file1,"%lf, %lf\n",obstacle[0],obstacle[1]);
-							// fclose(file1);
+							
 							sub_obs.push_back({obstacle[0],obstacle[1]});
 						}
 						
@@ -3019,10 +2739,6 @@ class GapBarrier
 					num_obs=sub_obs.size();
 					obs_sep1=obs_sep1*1.1;
 				}
-				// FILE *file1 = fopen("/home/gjsk/catkin_ws/bezier.txt", "a");
-				// fprintf(file1,"*******************\n");
-				// fclose(file1);
-				printf("%NumObs: %d\n",num_obs);
 				
 				
 				//PERFORM THE MPC NON-LINEAR OPTIMIZATION
@@ -3031,18 +2747,18 @@ class GapBarrier
 
 
 				for (int i=nMPC*kMPC;i<2*nMPC*kMPC;i++){
-					nlopt_set_lower_bound(opt, i, -max_steering_angle); //Bounds on max and min steering angle (delta)
-					nlopt_set_upper_bound(opt, i, max_steering_angle);
+					nlopt_set_lower_bound(opt, i, -max_steering_angle-1e-6); //Bounds on max and min steering angle (delta)
+					nlopt_set_upper_bound(opt, i, max_steering_angle+1e-6);
 				}
 
 				for (int i=4*nMPC*kMPC;i<5*nMPC*kMPC;i++){
 					if(i==4*nMPC*kMPC){
-						nlopt_set_lower_bound(opt, i, vel_adapt); //Set initial velocity
-						nlopt_set_upper_bound(opt, i, vel_adapt);
+						nlopt_set_lower_bound(opt, i, vel_adapt-1e-6); //Set initial velocity
+						nlopt_set_upper_bound(opt, i, vel_adapt+1e-6);
 					}
 					else{
 						nlopt_set_lower_bound(opt, i, min_speed); //Bounds on max and min velocity
-						nlopt_set_upper_bound(opt, i, max_speed);
+						nlopt_set_upper_bound(opt, i, max_speed+1e-6);
 					}
 				}
 				
@@ -3096,6 +2812,10 @@ class GapBarrier
 				y_vehicle[0]=0;
 				thetas[0]=0;
 				vel_vehicle[0]=vel_adapt;
+				double start_vel=max_speed/2;
+				if(vel_adapt<start_vel){
+					start_vel=vel_adapt;
+				}
 
 				//Try new attempt at initial guess
 				for (int j=0;j<nMPC;j++){
@@ -3107,7 +2827,7 @@ class GapBarrier
 							double thetanext=theta_refs[j];
 							while(thetanext>M_PI) thetanext-=2*M_PI;
 							while(thetanext<-M_PI) thetanext+=2*M_PI;
-							double ex_delta=atan((thetanext)*opt_params[1]/(opt_params[0]*max_speed/2));
+							double ex_delta=atan((thetanext)*opt_params[1]/(opt_params[0]*start_vel));
 							if(thetanext>0){
 								deltas[i+j*kMPC]=std::min(ex_delta,std::min(last_delta+opt_params[2],max_steering_angle-1e-6));
 							}
@@ -3122,7 +2842,7 @@ class GapBarrier
 							double thetanext=theta_refs[j];
 							while(thetanext>thetas[i+j*kMPC]+M_PI) thetanext-=2*M_PI;
 							while(thetanext<thetas[i+j*kMPC]-M_PI) thetanext+=2*M_PI;
-							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/(opt_params[0]*max_speed/2));
+							double ex_delta=atan((thetanext-thetas[i+j*kMPC])*opt_params[1]/(opt_params[0]*start_vel));
 							if(thetanext>thetas[i+j*kMPC]){
 								deltas[i+j*kMPC]=std::min(ex_delta,std::min(deltas[i+j*kMPC-1]+opt_params[2],max_steering_angle-1e-6));
 							}
@@ -3138,7 +2858,7 @@ class GapBarrier
 								thetas[1]=thetas[0]+opt_params[0]*vel_vehicle[0]/opt_params[1]*tan(deltas[0]);
 							}
 							else{
-								thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]*(max_speed/2)/opt_params[1]*tan(deltas[i+j*kMPC]);
+								thetas[i+j*kMPC+1]=thetas[i+j*kMPC]+opt_params[0]*(start_vel)/opt_params[1]*tan(deltas[i+j*kMPC]);
 							}
 						}
 					}
@@ -3146,7 +2866,7 @@ class GapBarrier
 				for(int i=1;i<nMPC*kMPC;i++){
 					x_vehicle[i]=x_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*cos(thetas[i-1]);
 					y_vehicle[i]=y_vehicle[i-1]+opt_params[0]*vel_vehicle[i-1]*sin(thetas[i-1]);
-					vel_vehicle[i]=max_speed/2;
+					vel_vehicle[i]=start_vel;
 				}
 
 				for (int i=0;i<nMPC*kMPC;i++){ //Starting guess
@@ -3155,7 +2875,6 @@ class GapBarrier
 					x[i+2*nMPC*kMPC]=x_vehicle[i];
 					x[i+3*nMPC*kMPC]=y_vehicle[i];
 					x[i+4*nMPC*kMPC]=vel_vehicle[i];
-					// printf("Guess %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 				}
 				int successful_opt=0;
 
@@ -3174,7 +2893,7 @@ class GapBarrier
 				}
 
 				if (optim < 0) {
-					ROS_INFO("Optimization Error %d",optim);
+					ROS_ERROR("Optimization Error %d",optim);
 					printf("NLOPT Error: %s\n", nlopt_get_errmsg(opt));
 					
 				}
@@ -3187,18 +2906,11 @@ class GapBarrier
 						x_vehicle[i]=x[i+2*nMPC*kMPC];
 						y_vehicle[i]=x[i+3*nMPC*kMPC];
 						vel_vehicle[i]=x[i+4*nMPC*kMPC];
-						// printf("Result %d %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
 					}
 					
 					last_delta=deltas[1];
 					vel_adapt=std::max(0.0,vel_vehicle[1]);
-					printf("%lf, %lf\n",vel_adapt,last_delta);
-					// printf("********************\n");
-					// for(int i=0;i<nMPC*kMPC;i++){
-					// 	printf("%d, %lf, %lf, %lf, %lf, %lf\n",i,x_vehicle[i],y_vehicle[i],thetas[i],deltas[i],vel_vehicle[i]);
-
-					// }
-					// printf("********************\n");
+					
 				}
 				if(minf<5 && startcheck==0){
 					startcheck=1;
@@ -3435,13 +3147,24 @@ class GapBarrier
 				min_distance = max_lidar_range + 100; int idx1, idx2;
 				idx1 = -sec_len+int(scan_beams/2); idx2 = sec_len + int(scan_beams/2);
 
-				for(int i = idx1; i <= idx2; ++i){
-					if(fused_ranges[i] < min_distance) min_distance = fused_ranges[i];
+				// for(int i = idx1; i <= idx2; ++i){
+				// 	if(fused_ranges[i] < min_distance) min_distance = fused_ranges[i];
+				// }
+				for(int i=0;i<fused_ranges_MPC_tot0.size();i++){ //Consider all obstacles, not just sensor data
+					if(std::abs(lidar_transform_angles_tot0[i])<heading_beam_angle && fused_ranges_MPC_tot0[i]<min_distance){
+						min_distance=fused_ranges_MPC_tot0[i];
+					}
+
+				}
+				for(int i=0;i<fused_ranges_MPC_veh_det0.size();i++){ //Consider the full detected vehicle trajectory
+					if(std::abs(lidar_transform_angles_veh_det0[i])<heading_beam_angle && fused_ranges_MPC_veh_det0[i]<min_distance){
+						min_distance=fused_ranges_MPC_veh_det0[i];
+					}
+
 				}
 
 				velocity_scale = 1 - exp(-std::max(min_distance-stop_distance,0.0)/stop_distance_decay); //2 factor ensures we only slow when appropriate, otherwise MPC behaviour dominates
 				
-				// ROS_INFO("%.3f", velocity);
 
 				delta_d=deltas[1]; //Use next delta command now to allow servo to transition
 
@@ -3449,8 +3172,9 @@ class GapBarrier
 
 				vel_adapt=std::max(std::min(vel_adapt,max_speed),min_speed);
 				if(min_distance<stop_distance) {vel_adapt=0; stopped=1;}
+				printf("Steering Angle: %lf, Velocity: %lf\n",delta_d,vel_adapt);
+				printf("*******************\n");
 			}
-
 			ackermann_msgs::AckermannDriveStamped drive_msg; 
 			drive_msg.header.stamp = ros::Time::now();
 			drive_msg.header.frame_id = "base_link";
@@ -3458,9 +3182,7 @@ class GapBarrier
 				drive_msg.drive.steering_angle = delta_d; //delta_d
 				if(forcestop==0){ //If the optimization fails for some reason, we get nan: stop the vehicle
 					drive_msg.drive.speed = vel_adapt; //velocity_MPC
-					FILE *file1 = fopen("/home/gjsk/berlin_MPC.txt", "a");
-					fprintf(file1,"%lf, %lf\n",simx,simy);
-					fclose(file1);
+					
 				}
 				else{
 					drive_msg.drive.speed = 0;
@@ -3472,8 +3194,6 @@ class GapBarrier
 			}
 			
 			driver_pub.publish(drive_msg);
-			ros::Time ta = ros::Time::now();
-			// printf("LIDAR end: %lf\n",ta.toSec()-current_time);
 		}
 
 
@@ -3484,14 +3204,7 @@ int main(int argc, char **argv){
 		GapBarrier gb;
 
 		while(ros::ok()){
-			// std_msgs::String msg;
-			// std::stringstream ss;
-			// ss  << gb.preprocess_lidar(); 
-			// msg.data = ss.str();
-
-			// ROS_INFO("%s", msg.data.c_str());
-
-			// chatter_pub.publish(msg);
+			
 			ros::spinOnce();
 		}
 
