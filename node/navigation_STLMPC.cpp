@@ -2679,7 +2679,7 @@ class GapBarrier
 				}
 				else {
 					successful_opt=1;
-					printf("Successful Opt: %d Steering Angle: %lf\n",optim, deltas[1]);
+					printf("Successful Opt: %d\n",optim);
 					for (int i=0;i<nMPC*kMPC;i++){
 						thetas[i]=x[i];
 						deltas[i]=x[i+nMPC*kMPC];
@@ -2899,7 +2899,8 @@ class GapBarrier
 				delta_d=deltas[1]; //Use next delta command now to allow servo to transition
 
 				velocity_MPC = velocity_scale*vehicle_velocity; //Implement slowing if we near an obstacle
-				printf("Velocity: %lf\n",velocity_MPC);
+				printf("Steering Angle: %lf, Velocity: %lf\n",delta_d,velocity_MPC);
+				printf("*******************\n");
 
 			}
 
