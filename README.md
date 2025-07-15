@@ -85,46 +85,70 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 **General Path Planning Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
+| wheelbase             | Front to rear car axle distance             | 0.287 m          |
 | max_speed             | Maximum allowed forward velocity             | 3 m/s          |
 | min_speed             | Minimum allowed forward velocity             | 0 m/s (STLMPC); 0.5 m/s (QBMPC)          |
+| max_steering_angle             | Maximum steering angle magnitude             | 0.4189 rad          |
+| max_accel             | Maximum acceleration/deceleration             | 2.5 m/s²          |
+| max_steering_vel             | Maximum steering angle rate             | 3.2 rad/s          |
+| angle_al             | Lower angular bound on left obstacle cluster             | 200/180*pi rad          |
+| angle_bl             | Upper angular bound on left obstacle cluster             | 270/180*pi rad          |
+| angle_br             | Lower angular bound on right obstacle cluster             | 90/180*pi rad          |
+| angle_ar             | Upper angular bound on right obstacle cluster             | 160/180*pi rad          |
+| safe_distance             | Range of obstacles that pose an immediate collision risk             | 2 m          |
 <br>
 
-**STLMPC Parameters**
+**PD Additional Parameters**
+| Parameter     | Description   | Default    |
+|:--------------|:--------------|------------|
+| k_p             | Proportional gain             | 3.5 s⁻²          |
+| k_d             | Derivative gain             | 4.0 s⁻¹          |
+<br>
+
+**STLMPC Additional Parameters**
+| Parameter     | Description   | Default    |
+|:--------------|:--------------|------------|
+| nMPC             | Number of tracking lines             | 2          |
+| kMPC             | Samples per tracking line             | 8          |
+| vehicle_velocity             | Desired constant velocity             | 1.5 m/s          |
+| use_map             | Enable/disable AMCL, map obstacles             | 0 (Disabled)          |
+| veh_det_length             | Detected vehicle's box outline length             | 0.5 m          |
+| veh_det_width             | Detected vehicle's box outline width             | 0.4 m          |
+| use_neural_net             | Enable/disable YOLO for vehicle detection             | 0 (Disabled)          |
+| d_factor_STLMPC             | Distance objective term base weight             | 1          |
+| d_dot_factor_STLMPC             | Distance derivative objective term base weight             | 30          |
+| delta_factor_STLMPC             | Steering angle objective term base weight             | 1          |
+<br>
+
+**Variable-Velocity STLMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
 <br>
 
-**Variable-Velocity STLMPC Parameters**
+**QBMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
 <br>
 
-**QBMPC Parameters**
+**Pursuit MPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
 <br>
 
-**Pursuit MPC Parameters**
+**P-STLMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
 <br>
 
-**P-STLMPC Parameters**
-| Parameter     | Description   | Default    |
-|:--------------|:--------------|------------|
-| A             | B             | C          |
-| D             | E             | F          |
-<br>
-
-**P-QBMPC Parameters**
+**P-QBMPC Additional Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
