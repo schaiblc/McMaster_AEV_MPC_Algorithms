@@ -88,11 +88,13 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | A             | B             | C          |
 | D             | E             | F          |
 
+
 **STLMPC Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
+
 
 **Variable-Velocity STLMPC Parameters**
 | Parameter     | Description   | Default    |
@@ -100,17 +102,20 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | A             | B             | C          |
 | D             | E             | F          |
 
+
 **QBMPC Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
 
+
 **Pursuit MPC Parameters**
 | Parameter     | Description   | Default    |
 |:--------------|:--------------|------------|
 | A             | B             | C          |
 | D             | E             | F          |
+
 
 **P-STLMPC Parameters**
 | Parameter     | Description   | Default    |
