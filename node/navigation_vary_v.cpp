@@ -755,7 +755,6 @@ class GapBarrier
 			ros::param::get("~cv_groundplane_max_distance", cv_groundplane_max_distance); 
 
 
-
 			intrinsics_d_defined= false; intrinsics_c_defined= false;
         	cv_image_data_defined= false;
 
