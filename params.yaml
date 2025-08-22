@@ -203,7 +203,7 @@ CenterOffset: 0
 DistanceLeft: 0.9
 DistanceRight: 0.9
 TrackWall: 0
-angle_bl: rad(270*pi/180)
+angle_bl: rad(270*pi/180) #(All taken with respect to the -x axis, later equivalently expressed wrt the +x axis)
 angle_al: rad(200*pi/180) #Changed from 185 to ensure we aren't confused by points ahead, look mainly to side      
 angle_br: rad(90*pi/180)
 angle_ar: rad(160*pi/180) #Changed from 175
