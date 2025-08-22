@@ -104,6 +104,8 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 |:--------------|:--------------|------------|
 | k_p             | Proportional gain             | 3.5 s⁻²          |
 | k_d             | Derivative gain             | 4.0 s⁻¹          |
+| optim_mode             | Independent/parallel bounding lines for tracking line QP (Must be parallel in MPC algorithms)             | 1 (Parallel)         |
+| tau             | Bounding line smoothing time constant (Only used for independent bounding lines and disregarded in MPC algorithms)             | 0.1 s          |
 <br>
 
 **STLMPC Additional Parameters**
