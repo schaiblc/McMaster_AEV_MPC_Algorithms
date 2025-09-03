@@ -106,6 +106,8 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 | k_d             | Derivative gain             | 4.0 s⁻¹          |
 | optim_mode             | Independent/parallel bounding lines for tracking line QP (Must be parallel in MPC algorithms)             | 1 (Parallel)         |
 | tau             | Bounding line smoothing time constant (Only used for independent bounding lines and disregarded in MPC algorithms)             | 0.1 s          |
+| cv_groundplane_max_height             | Vertical distance below the base frame, only points below are considered for ground-plane fitting             | 0.03 m          |
+| cv_groundplane_max_distance             | Maximum distance above the ground plane at which a point is considered a ground point             | 0.03 m          |
 <br>
 
 **STLMPC Additional Parameters**
