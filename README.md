@@ -1,5 +1,10 @@
 # This repository contains the source code used for the implementation of the STLMPC, QBMPC, P-STLMPC & P-QBMPC algorithms, which achieve safe local path planning in multi-vehicle environments in the absence of a global planner, map and known goal location
 <!-- Add respective publications, brief descriptions -->
+
+## PD
+A preliminary, non-predictive Proportional-Derivative control approach, which identifies a heading angle along the direction of the largest open space and constructs left and right bounding lines for obstacle separation through a single QP. A feedback-linearizing PD controller then regulates the vehicle position relative to either the left, right or both obstacle bounding lines through the steering angle control input. An optional augmentation enforces smooth transitions between bounding lines in successive control steps.   
+
+
 ## STLMPC
 Successive local tracking lines are generated via QPs (https://github.com/liuq/QuadProgpp), then a nonlinear SLSQP solver (https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#slsqp) performs optimization over a future time horizon, yielding a predicted trajectory. The first free control inputs are applied, and the process repeats each control step. Dynamic obstacle avoidance is integrated via a CNN based on the YOLO architecture, where EKF tracking is integrated into path planning for multi-vehicle contexts. Both implementations of STLMPC, assuming a constant velocity and varying velocity, are given (the varying velocity scheme encourages higher speeds for racing).
 
@@ -71,7 +76,7 @@ These adaptive pursuit algorithms modify the prior algorithms to fit the case of
 
 
 ## Additional Notes
-* The navigation nodes for each of the listed algorithms are provided in the node directory, as well as a non-predictive PD approach which uses a single tracking line from STLMPC (for comparison).
+* The navigation nodes for each of the listed MPC algorithms are provided in the node directory, as well as a non-predictive PD approach which uses a single tracking line from STLMPC (for comparison).
 * The f1tenth_simulator framework for ROS1 (https://github.com/f1tenth/f1tenth_simulator) was used for the implementation of these local path planning techniques.
 * Nonholonomic constraints are assumed according to the kinematic bicycle model, the full set of tunable parameters is given in params.yaml.
 * AMCL localization can be enabled in params.yaml as can vehicle detection via YOLO for dynamic obstacle avoidance and vehicle pursuit.
