@@ -4,7 +4,7 @@
 ## PD
 A preliminary, non-predictive Proportional-Derivative control approach, which identifies a heading angle along the direction of the largest open space and constructs left and right bounding lines for obstacle separation through a single QP. A feedback-linearizing PD controller then regulates the vehicle position relative to either the left, right or both obstacle bounding lines through the steering angle control input. An optional augmentation enforces smooth transitions between bounding lines in successive control steps.   
 
-### Reference
+#### Reference
 ```
 @inproceedings{Schaible2026SafeNav,
     author       = {Schaible, Christian and Sirouspour, Shahin},
