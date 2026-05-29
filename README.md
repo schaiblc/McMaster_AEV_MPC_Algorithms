@@ -4,6 +4,17 @@
 ## PD
 A preliminary, non-predictive Proportional-Derivative control approach, which identifies a heading angle along the direction of the largest open space and constructs left and right bounding lines for obstacle separation through a single QP. A feedback-linearizing PD controller then regulates the vehicle position relative to either the left, right or both obstacle bounding lines through the steering angle control input. An optional augmentation enforces smooth transitions between bounding lines in successive control steps.   
 
+### Reference
+```
+@inproceedings{Schaible2026SafeNav,
+    author       = {Schaible, Christian and Sirouspour, Shahin},
+    title        = {Safe {Local} {Navigation} for {Ackermann}-{Steered} {Robots} in {Unmapped} {Environments}},
+    booktitle    = {Proceedings of the 23rd {Conference} on {Robots} and {Vision}},
+    year         = {2026},
+    month        = may,
+    url          = {https://crv.pubpub.org/pub/id7dk3an},
+}
+```
 
 ## STLMPC
 Successive local tracking lines are generated via QPs (https://github.com/liuq/QuadProgpp), then a nonlinear SLSQP solver (https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/#slsqp) performs optimization over a future time horizon, yielding a predicted trajectory. The first free control inputs are applied, and the process repeats each control step. Dynamic obstacle avoidance is integrated via a CNN based on the YOLO architecture, where EKF tracking is integrated into path planning for multi-vehicle contexts. Both implementations of STLMPC, assuming a constant velocity and varying velocity, are given (the varying velocity scheme encourages higher speeds for racing).
