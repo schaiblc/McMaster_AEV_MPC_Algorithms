@@ -1843,7 +1843,7 @@ class GapBarrier
 				x.resize(n);
 
 				solve_quadprog(G, gi0, CE, ce0, CI, ci0, x);
-
+				if (std::abs(x[2]) < 1e-3) x[2] = std::copysign(1e-3, x[2]);
 
 
 				wr[0] = (x[0]/(x[2]-1)); wr[1] = (x[1]/(x[2]-1));
