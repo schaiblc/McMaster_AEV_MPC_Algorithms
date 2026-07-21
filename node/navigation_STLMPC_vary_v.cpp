@@ -2772,9 +2772,9 @@ class GapBarrier
 			
 
 				nlopt_set_min_objective(opt, myfunc, &track_line);
-				double tol[nMPC*kMPC-1]={1e-8};
-				double tol1[2*nMPC*kMPC+1]={1e-8};
-				double tol2[4*nMPC*kMPC-2]={1e-8};
+				std::vector<double> tol(nMPC*kMPC-1, 1e-8);
+				std::vector<double> tol1(2*nMPC*kMPC, 1e-8);
+				std::vector<double> tol2(4*nMPC*kMPC-2, 1e-8);
 				
 				
 				double opt_params[4]={std::max(default_dt,dt),wheelbase,std::abs(max_servo_speed*std::max(default_dt,dt)),last_delta};
@@ -2797,11 +2797,11 @@ class GapBarrier
 					opt_params_vel.push_back(sub_obs[i][1]);
 				}
 				
-				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, theta_equality_con, &opt_params, tol);
-				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, x_equality_con, &opt_params, tol);
-				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol);
-				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC, delta_inequality_con, &opt_params, tol1);
-				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2);
+				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, theta_equality_con, &opt_params, tol.data());
+				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, x_equality_con, &opt_params, tol.data());
+				nlopt_add_equality_mconstraint(opt, nMPC*kMPC-1, y_equality_con, &opt_params, tol.data());
+				nlopt_add_inequality_mconstraint(opt, 2*nMPC*kMPC, delta_inequality_con, &opt_params, tol1.data());
+				nlopt_add_inequality_mconstraint(opt, 4*nMPC*kMPC-2, vel_inequality_con, opt_params_vel.data(), tol2.data());
 
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
 				nlopt_set_maxtime(opt, 0.05);
