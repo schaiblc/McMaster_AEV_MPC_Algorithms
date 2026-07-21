@@ -3017,12 +3017,12 @@ class GapBarrier
 
 
 				nlopt_set_min_objective(opt, myfunc, opt_params1.data());
-				double tol[9*bez_curv_pts]={1e-8};
-				double tolp[1]={1e-8};
+				std::vector<double> tol(9*bez_curv_pts, 1e-8);
+				std::vector<double> tolp(1, 1e-8);
 				
-				nlopt_add_inequality_mconstraint(opt, 9*bez_curv_pts, bezier_inequality_con, opt_params2.data(), tol);
+				nlopt_add_inequality_mconstraint(opt, 9*bez_curv_pts, bezier_inequality_con, opt_params2.data(), tol.data());
 				if(leader_detect==1){
-					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_paramsp.data(), tolp);
+					nlopt_add_inequality_mconstraint(opt, 1, pursuit_inequality_con, opt_paramsp.data(), tolp.data());
 				}
 			
 				nlopt_set_xtol_rel(opt, 0.001); //Termination parameters
